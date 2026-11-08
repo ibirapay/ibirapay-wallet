@@ -1,0 +1,2 @@
+# Build the Spark SDK Rust library from source: never download Breez's precompiled binaries (they lack the fork patches in crates/).
+use_precompiled_binaries: false

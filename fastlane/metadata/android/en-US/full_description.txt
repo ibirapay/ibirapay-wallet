@@ -1,0 +1,5 @@
+Self-custodial wallet by IBIRAPAY: on-chain Bitcoin, Lightning (Spark) and stablecoins on Polygon and Solana.
+
+Keys stay on your device, protected by a PIN. The wallet is recovered with 12 words. It asks for no e-mail, ID number or phone.
+
+It talks to the networks through IBIRAPAY relay servers, which hold no keys and no funds. Test version: use small amounts only.

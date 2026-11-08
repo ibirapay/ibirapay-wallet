@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- No plaintext HTTP, from this app or any library in it. Android already blocks cleartext by default for
+     targetSdk 28+; this makes it explicit and failure-proof against a future manifest change. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>
