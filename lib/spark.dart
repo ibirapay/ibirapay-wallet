@@ -44,7 +44,7 @@ const sparkDeploymentJson = '''
 }
 ''';
 
-/// Spark through our relay (owner 11-06: ALL wallet traffic goes through the pagcoin relay): Cloudflare tunnel `pagcoin-dedi` ->
+/// Spark through our relay (owner 11-06: ALL wallet traffic goes through the pagcoin relay): Cloudflare tunnel ->
 /// operators (gRPC) and SSP. Probed 11-06 (gRPC on in the pagcoin.org zone): connect, sync, invoice, deposit address and a 210 s idle all work through it. The direct deployment stays
 /// as the fallback of [SparkWallet.open]: the relay is tried first and the direct hosts only when opening a connection through it fails.
 const sparkRelayEnabled = bool.fromEnvironment('SPARK_RELAY', defaultValue: true);

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:zxing_lib/common.dart';
 import 'package:zxing_lib/zxing.dart';
 
+import 'i18n.dart';
 import 'theme.dart';
 
 /// Reads a QR code from the luminance (Y) plane of a camera frame: `bytesPerRow` is the row stride, which can be wider
@@ -102,9 +103,9 @@ class ScanPageState extends State<ScanPage> {
       }
       if (mounted) setState(() {});
     } on CameraException catch (e) {
-      _fail(e.code.startsWith('CameraAccess') ? 'Sem permissão para usar a câmera. Libere nas configurações do aparelho ou cole o código.' : 'Não consegui abrir a câmera (${e.code}).');
+      _fail(e.code.startsWith('CameraAccess') ? tr('scan.noPermission') : tr('scan.cameraErr', {'code': e.code}));
     } catch (e) {
-      _fail('Não consegui abrir a câmera.');
+      _fail(tr('scan.cameraFail'));
     }
   }
 
@@ -149,7 +150,7 @@ class ScanPageState extends State<ScanPage> {
   Widget build(BuildContext context) {
     final cam = _camera;
     return Scaffold(
-      appBar: AppBar(title: const Text('Escanear QR'), backgroundColor: C.surface),
+      appBar: AppBar(title: Text(tr('scan.title')), backgroundColor: C.surface),
       body: _problem != null
           ? Center(
               child: Padding(
@@ -157,7 +158,7 @@ class ScanPageState extends State<ScanPage> {
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Text(_problem!, key: const Key('scan-problem'), textAlign: TextAlign.center),
                   const SizedBox(height: 16),
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Voltar')),
+                  TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('scan.back'))),
                 ]),
               ),
             )

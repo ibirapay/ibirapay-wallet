@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wallet/i18n.dart';
 import 'package:wallet/delete_wallet_view.dart';
 import 'package:wallet/pending_sends.dart';
 import 'package:wallet/theme.dart';
@@ -47,6 +48,25 @@ Future<void> _confirmAll(WidgetTester t, {String word = 'APAGAR'}) async {
 }
 
 void main() {
+  tearDown(() => lang.value = Lang.pt);
+
+  for (final (l, word) in [(Lang.en, 'delete'), (Lang.es, 'borrar')]) {
+    testWidgets('the confirmation word follows the language: ${l.label} asks for ${word.toUpperCase()}, not APAGAR', (t) async {
+      lang.value = l;
+      final w = _World();
+      await _pump(t, w, pin: () async => true);
+      expect(find.textContaining(word.toUpperCase()), findsWidgets);
+      await t.tap(find.byType(CheckboxListTile));
+      await t.pump();
+      await t.enterText(find.byType(TextField), 'APAGAR');
+      await t.pump();
+      expect(t.widget<GradientButton>(find.byType(GradientButton)).onPressed, isNull, reason: 'the Portuguese word does not unlock it in ${l.label}');
+      await t.enterText(find.byType(TextField), word);
+      await t.pump();
+      expect(t.widget<GradientButton>(find.byType(GradientButton)).onPressed, isNotNull);
+    });
+  }
+
   testWidgets('shows what is cut off, and the button stays off until the tick AND the word', (t) async {
     final w = _World();
     await _pump(t, w, pin: () async => true);

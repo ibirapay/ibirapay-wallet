@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'i18n.dart';
 import 'pin.dart';
 import 'pin_pad.dart';
 import 'seed_backup.dart' show secureScreen;
@@ -207,8 +208,8 @@ class _LockLayerState extends State<LockLayer> {
             ? widget.forgotBuilder(context, () => _setForgot(false))
             : Column(
                 children: [
-                  Expanded(child: PinVerifyView(store: widget.lock.pins, title: 'Digite o PIN', now: widget.lock._now, onVerified: widget.lock.unlock)),
-                  TextButton(onPressed: () => _setForgot(true), child: const Text('Esqueci o PIN', style: TextStyle(color: C.muted))),
+                  Expanded(child: PinVerifyView(store: widget.lock.pins, now: widget.lock._now, onVerified: widget.lock.unlock)),
+                  TextButton(onPressed: () => _setForgot(true), child: Text(tr('pin.forgot'), style: const TextStyle(color: C.muted))),
                   const SizedBox(height: 8),
                 ],
               ),

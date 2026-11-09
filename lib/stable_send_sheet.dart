@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'chain_balances.dart';
 import 'send_sheet.dart' show ScanPage;
+import 'i18n.dart';
 import 'stable_send.dart';
 import 'theme.dart';
 
@@ -97,7 +98,7 @@ class _StableSendSheetState extends State<StableSendSheet> {
     } on SendError catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
-      if (mounted) setState(() => _error = 'Erro inesperado: $e');
+      if (mounted) setState(() => _error = tr('sts.unexpected', {'e': e}));
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -131,7 +132,7 @@ class _StableSendSheetState extends State<StableSendSheet> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _failure = 'Erro inesperado: $e. Confira o saldo e o histórico no explorador antes de enviar de novo';
+          _failure = tr('sts.unexpectedCheck', {'e': e});
           _step = _Step.done;
         });
       }
@@ -143,7 +144,7 @@ class _StableSendSheetState extends State<StableSendSheet> {
     children: [
       Image.asset('assets/icons/${_poly ? 'polygon' : 'solana'}.png', width: size, height: size),
       const SizedBox(width: 8),
-      Text('Rede $_netName', style: TextStyle(fontSize: font, fontWeight: FontWeight.w700)),
+      Text(tr('ss.network', {'net': _netName}), style: TextStyle(fontSize: font, fontWeight: FontWeight.w700)),
     ],
   );
 
@@ -162,7 +163,7 @@ class _StableSendSheetState extends State<StableSendSheet> {
     final bal = _bal(_token);
     return Column(
       children: [
-        const SheetTitle('Enviar USDT ou USDC', Icons.arrow_upward),
+        SheetTitle(tr('sts.title'), Icons.arrow_upward),
         const SizedBox(height: 10),
         _netRow(),
         const SizedBox(height: 16),
@@ -187,14 +188,14 @@ class _StableSendSheetState extends State<StableSendSheet> {
           minLines: 2,
           maxLines: 3,
           style: const TextStyle(fontFamily: monoFamily, fontSize: 13),
-          decoration: InputDecoration(hintText: _poly ? 'Endereço Polygon (0x...)' : 'Endereço Solana'),
+          decoration: InputDecoration(hintText: _poly ? tr('sts.addressPoly') : tr('sts.addressSol')),
         ),
         const SizedBox(height: 10),
         Row(
           children: [
-            Expanded(child: OutlineButton(label: 'Colar', icon: Icons.content_paste, onPressed: _paste)),
+            Expanded(child: OutlineButton(label: tr('common.paste'), icon: Icons.content_paste, onPressed: _paste)),
             const SizedBox(width: 10),
-            Expanded(child: OutlineButton(label: 'Escanear', icon: Icons.qr_code_scanner, onPressed: _scan)),
+            Expanded(child: OutlineButton(label: tr('common.scan'), icon: Icons.qr_code_scanner, onPressed: _scan)),
           ],
         ),
         const SizedBox(height: 14),
@@ -202,35 +203,35 @@ class _StableSendSheetState extends State<StableSendSheet> {
           controller: _amount,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           style: const TextStyle(fontFamily: monoFamily, fontSize: 24, fontWeight: FontWeight.w600),
-          decoration: InputDecoration(hintText: 'Valor', suffixText: _token.symbol),
+          decoration: InputDecoration(hintText: tr('common.amount'), suffixText: _token.symbol),
         ),
         const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              bal == null ? 'Saldo: ...' : 'Saldo: ${fmtUnits(bal, stableDecimals6)} ${_token.symbol}',
+              bal == null ? tr('sts.balance', {'v': '...'}) : tr('sts.balance', {'v': '${fmtUnits(bal, stableDecimals6)} ${_token.symbol}'}),
               style: const TextStyle(color: C.muted, fontSize: 12),
             ),
             if (bal != null && bal > BigInt.zero)
               GestureDetector(
                 onTap: () => setState(() => _amount.text = fmtUnits(bal, stableDecimals6, minPlaces: stableDecimals6)),
-                child: const Text('Tudo', style: TextStyle(color: C.primaryLight, fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(tr('sts.all'), style: const TextStyle(color: C.primaryLight, fontSize: 13, fontWeight: FontWeight.w600)),
               ),
           ],
         ),
         Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Text(
-            'O gás é pago em ${_token.gasSymbol}, da sua própria carteira. Envie só para um endereço da rede $_netName.',
+            tr('sts.gasNote', {'gas': _token.gasSymbol, 'net': _netName}),
             style: const TextStyle(color: C.muted, fontSize: 12),
           ),
         ),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: const TextStyle(color: C.warn, fontSize: 13))),
         const SizedBox(height: 16),
-        GradientButton(label: _working ? 'Consultando a rede...' : 'Continuar', onPressed: _working ? null : _continue),
+        GradientButton(label: _working ? tr('sts.consulting') : tr('common.continue'), onPressed: _working ? null : _continue),
         const SizedBox(height: 8),
-        TextButton(onPressed: _working ? null : () => Navigator.pop(context, false), child: const Text('Cancelar', style: TextStyle(color: C.muted))),
+        TextButton(onPressed: _working ? null : () => Navigator.pop(context, false), child: Text(tr('common.cancel'), style: const TextStyle(color: C.muted))),
       ],
     );
   }
@@ -242,7 +243,7 @@ class _StableSendSheetState extends State<StableSendSheet> {
     String gas(BigInt v) => '${fmtUnits(v, gasDec, minPlaces: 4)} ${q.token.gasSymbol}';
     return Column(
       children: [
-        const Text('Você vai enviar', style: TextStyle(color: C.textSec, fontSize: 14)),
+        Text(tr('send.youWillSend'), style: const TextStyle(color: C.textSec, fontSize: 14)),
         const SizedBox(height: 6),
         Text('${fmtUnits(q.amount, stableDecimals6)} ${q.token.symbol}', style: const TextStyle(fontFamily: monoFamily, fontSize: 34, fontWeight: FontWeight.w700)),
         const SizedBox(height: 12),
@@ -257,40 +258,40 @@ class _StableSendSheetState extends State<StableSendSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Para', style: TextStyle(color: C.textSec, fontSize: 14)),
+              Text(tr('common.to'), style: const TextStyle(color: C.textSec, fontSize: 14)),
               const SizedBox(height: 6),
               _AddressText(q.to),
               const Divider(height: 20),
-              RowKV(_poly ? 'Taxa de rede (até)' : 'Taxa de rede', gas(q.fee)),
-              if (q.rent > BigInt.zero) RowKV('Conta do destinatário (1ª vez)', gas(q.rent)),
-              RowKV('Gás que sobra', gas(left)),
+              RowKV(_poly ? tr('sts.networkFeeUpTo') : tr('send.networkFee'), gas(q.fee)),
+              if (q.rent > BigInt.zero) RowKV(tr('sts.recipientAccount'), gas(q.rent)),
+              RowKV(tr('sts.gasLeft'), gas(left)),
             ],
           ),
         ),
         for (final w in q.warnings) Padding(padding: const EdgeInsets.only(top: 10), child: Text(w, style: const TextStyle(color: C.warn, fontSize: 13))),
         const SizedBox(height: 10),
         Text(
-          'Confira se o destinatário recebe na rede $_netName: ${_token.symbol} enviado para outra rede se perde.',
+          tr('sts.checkNet', {'net': _netName, 'sym': _token.symbol}),
           textAlign: TextAlign.center,
           style: const TextStyle(color: C.warn, fontSize: 12),
         ),
         const SizedBox(height: 16),
-        GradientButton(label: 'Enviar', colors: const [C.electric, Color(0xFF0099CC)], onPressed: _send),
+        GradientButton(label: tr('btn.send'), colors: const [C.electric, Color(0xFF0099CC)], onPressed: _send),
         const SizedBox(height: 8),
-        TextButton(onPressed: () => setState(() => _step = _Step.form), child: const Text('Voltar', style: TextStyle(color: C.muted))),
+        TextButton(onPressed: () => setState(() => _step = _Step.form), child: Text(tr('scan.back'), style: const TextStyle(color: C.muted))),
       ],
     );
   }
 
-  Widget _busy() => const Padding(
-    padding: EdgeInsets.symmetric(vertical: 48),
+  Widget _busy() => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 48),
     child: Column(
       children: [
-        SizedBox(width: 72, height: 72, child: CircularProgressIndicator(strokeWidth: 3, color: C.primaryLight)),
-        SizedBox(height: 24),
-        Text('Enviando...', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-        SizedBox(height: 6),
-        Text('Não feche o aplicativo. Pode levar até um minuto e meio', textAlign: TextAlign.center, style: TextStyle(color: C.textSec, fontSize: 14)),
+        const SizedBox(width: 72, height: 72, child: CircularProgressIndicator(strokeWidth: 3, color: C.primaryLight)),
+        const SizedBox(height: 24),
+        Text(tr('send.sending'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Text(tr('sts.sendingNote'), textAlign: TextAlign.center, style: const TextStyle(color: C.textSec, fontSize: 14)),
       ],
     ),
   );
@@ -298,16 +299,16 @@ class _StableSendSheetState extends State<StableSendSheet> {
   Widget _done() {
     final o = _outcome;
     final (IconData icon, Color color, String title, String body) = o == null
-        ? (Icons.close, C.warn, 'Não foi enviado', _failure ?? '')
+        ? (Icons.close, C.warn, tr('sts.notSent'), _failure ?? '')
         : switch (o.result) {
-            Result.confirmed => (Icons.check, C.success, 'Enviado', 'A transação foi confirmada na $_netName.'),
-            Result.reverted => (Icons.close, C.warn, 'A transação falhou', 'Ela foi executada e rejeitada pela rede: os ${_token.symbol} NÃO saíram, mas o gás foi gasto.'),
-            Result.notSent => (Icons.close, C.warn, 'Não foi enviado', 'A transação expirou antes de entrar na rede. Nada foi cobrado. Pode tentar de novo.'),
+            Result.confirmed => (Icons.check, C.success, tr('sts.sent'), tr('sts.confirmedOn', {'net': _netName})),
+            Result.reverted => (Icons.close, C.warn, tr('sts.txFailed'), tr('sts.revertedBody', {'sym': _token.symbol})),
+            Result.notSent => (Icons.close, C.warn, tr('sts.notSent'), tr('sts.expiredBody')),
             Result.pending => (
               Icons.hourglass_top,
               C.warn,
-              'Enviado, ainda sem confirmação',
-              'Não dá para saber ainda se entrou. O envio ficou registrado e o app confere sozinho. NÃO envie de novo antes de conferir: pode pagar duas vezes.',
+              tr('sts.pendingTitle'),
+              tr('sts.pendingBody'),
             ),
           };
     return Padding(
@@ -329,7 +330,7 @@ class _StableSendSheetState extends State<StableSendSheet> {
             Panel(child: SelectableText(o.id, style: const TextStyle(fontFamily: monoFamily, fontSize: 12, color: C.primaryLight))),
             const SizedBox(height: 10),
             OutlineButton(
-              label: _copied ? 'Link copiado' : 'Copiar link do explorador',
+              label: _copied ? tr('sts.linkCopied') : tr('sts.copyLink'),
               icon: Icons.copy,
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: o.explorer));
@@ -339,7 +340,7 @@ class _StableSendSheetState extends State<StableSendSheet> {
           ],
           const SizedBox(height: 20),
           GradientButton(
-            label: o == null || o.result == Result.notSent ? 'Voltar' : 'Concluir',
+            label: o == null || o.result == Result.notSent ? tr('scan.back') : tr('common.done'),
             onPressed: () {
               if (o == null || o.result == Result.notSent) {
                 setState(() {

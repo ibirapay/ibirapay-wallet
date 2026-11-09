@@ -117,7 +117,7 @@ class OutlineButton extends StatelessWidget {
   Widget build(BuildContext context) => OutlinedButton.icon(
     onPressed: onPressed,
     icon: icon == null ? const SizedBox.shrink() : Icon(icon, size: 18),
-    label: Text(label),
+    label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
     style: OutlinedButton.styleFrom(
       foregroundColor: Colors.white,
       side: const BorderSide(color: C.borderLight, width: 1.5),
@@ -210,7 +210,7 @@ class SheetTitle extends StatelessWidget {
     children: [
       Icon(icon, size: 20, color: C.primaryLight),
       const SizedBox(width: 8),
-      Text(text, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -.3)),
+      Flexible(child: Text(text, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -.3))),
     ],
   );
 }

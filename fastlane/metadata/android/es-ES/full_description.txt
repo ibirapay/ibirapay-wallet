@@ -1,0 +1,5 @@
+Cartera autocustodial de IBIRAPAY: Bitcoin on-chain, Lightning (Spark) y stablecoins en Polygon y Solana.
+
+Las claves se quedan en tu dispositivo, protegidas por un PIN. La cartera se recupera con 12 palabras. No pide correo, documento de identidad ni teléfono.
+
+Se comunica con las redes mediante servidores de retransmisión de IBIRAPAY, que no guardan claves ni fondos. Disponible en portugués, inglés y español. Versión de prueba: usa solo importes pequeños.

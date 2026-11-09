@@ -2,6 +2,7 @@
 // The order is the safety. Everything that is still a wallet's responsibility (Spark, the open sends, the PIN) stays until the words go:
 // a failure before that leaves a wallet that still works AND still remembers what it owes (run the wipe again). The words are the commit
 // point; what follows is leftovers that start-up clears when it finds no wallet.
+import 'i18n.dart';
 import 'pending_sends.dart';
 import 'pin.dart';
 import 'secret_store.dart';
@@ -43,10 +44,10 @@ class WalletOps {
   /// and only after the user was shown them and agreed to check them on an explorer before sending again.
   Future<void> wipe({bool acknowledgedOldSends = false}) async {
     if (await recentOpenSend() != null) {
-      throw WipeRefused('Há um envio de USDT/USDC em aberto. Espere ele terminar, ou cancele-o na tela inicial, antes de apagar a carteira.');
+      throw WipeRefused(tr('del.openSend'));
     }
     if (!acknowledgedOldSends && (await openSends()).isNotEmpty) {
-      throw WipeRefused('Há envios de USDT/USDC antigos sem resposta. Resolva, cancele ou descarte cada um (tela inicial, depois de conferir no explorador) antes de apagar a carteira.');
+      throw WipeRefused(tr('del.oldSends'));
     }
     await closeSpark();
     await deleteSparkData();

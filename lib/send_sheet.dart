@@ -3,6 +3,7 @@
 import 'package:breez_sdk_spark_flutter/breez_sdk_spark.dart' as breez;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'i18n.dart';
 import 'scan_page.dart';
 export 'scan_page.dart' show ScanPage;
 
@@ -154,10 +155,10 @@ class _SendSheetState extends State<SendSheet> {
           }
         }
       } else {
-        setState(() => _error = 'Código não suportado neste teste');
+        setState(() => _error = tr('send.unsupported'));
       }
     } catch (e) {
-      setState(() => _error = 'Erro: $e');
+      setState(() => _error = tr('err.generic', {'e': e}));
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -170,7 +171,7 @@ class _SendSheetState extends State<SendSheet> {
     if (before == null) return true;
     final still = await openOnchainSend(widget.pending, widget.sdk);
     if (still == null) {
-      _error = 'O envio anterior de ${fmtSats(before.sats)} sats já consta no histórico. Toque em Continuar para fazer o novo envio.';
+      _error = tr('send.prevInHistoryAmt', {'n': fmtSats(before.sats)});
       return false;
     }
     _open = still;
@@ -187,13 +188,13 @@ class _SendSheetState extends State<SendSheet> {
         setState(() {
           _open = null;
           _step = _Step.input;
-          _error = 'O envio anterior já consta no histórico. Toque em Continuar para fazer o novo envio.';
+          _error = tr('send.prevInHistory');
         });
       } else {
-        setState(() => _error = 'Ainda sem registro desse envio na carteira.');
+        setState(() => _error = tr('send.noRecord'));
       }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Erro: $e');
+      if (mounted) setState(() => _error = tr('err.generic', {'e': e}));
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -211,7 +212,7 @@ class _SendSheetState extends State<SendSheet> {
     try {
       await _prepareOnchain(r.address, r.sats, key: r.key);
     } catch (e) {
-      if (mounted) setState(() => _error = 'Erro: $e');
+      if (mounted) setState(() => _error = tr('err.generic', {'e': e}));
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -221,11 +222,11 @@ class _SendSheetState extends State<SendSheet> {
     final yes = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Descartar o registro?'),
-        content: const Text('Se o envio anterior chegou a sair e você fizer outro, o valor sai duas vezes. Descarte só depois de conferir no histórico.'),
+        title: Text(tr('send.discardTitle')),
+        content: Text(tr('send.discardBody')),
         actions: [
-          TextButton(key: const Key('discard-no'), onPressed: () => Navigator.pop(c, false), child: const Text('Voltar')),
-          TextButton(key: const Key('discard-yes'), onPressed: () => Navigator.pop(c, true), child: const Text('Descartar')),
+          TextButton(key: const Key('discard-no'), onPressed: () => Navigator.pop(c, false), child: Text(tr('scan.back'))),
+          TextButton(key: const Key('discard-yes'), onPressed: () => Navigator.pop(c, true), child: Text(tr('common.discard'))),
         ],
       ),
     );
@@ -240,13 +241,13 @@ class _SendSheetState extends State<SendSheet> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Erro: $e');
+      if (mounted) setState(() => _error = tr('err.generic', {'e': e}));
     }
   }
 
   Future<void> _bolt11(breez.Bolt11InvoiceDetails d, String invoice) async {
     if (d.amountMsat == null) {
-      _askAmount('a fatura', (sats) => _prepareBolt11(invoice, BigInt.from(sats)));
+      _askAmount(tr('send.invoice'), (sats) => _prepareBolt11(invoice, BigInt.from(sats)));
     } else {
       await _prepareBolt11(invoice, null);
     }
@@ -273,7 +274,7 @@ class _SendSheetState extends State<SendSheet> {
     try {
       await _withAmount!(a);
     } catch (e) {
-      setState(() => _error = 'Erro: $e');
+      setState(() => _error = tr('err.generic', {'e': e}));
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -307,9 +308,9 @@ class _SendSheetState extends State<SendSheet> {
       request: breez.PrepareSendPaymentRequest(paymentRequest: breez.PaymentRequest.input(input: address), amount: BigInt.from(sats)),
     );
     final m = prep.paymentMethod;
-    if (m is! breez.SendPaymentMethod_BitcoinAddress) throw 'Endereço Bitcoin não reconhecido';
+    if (m is! breez.SendPaymentMethod_BitcoinAddress) throw tr('send.badAddress');
     // What is confirmed (and read on screen) must be what will be paid.
-    if (m.address.address != address) throw 'O endereço mudou durante a preparação. Refaça o envio.';
+    if (m.address.address != address) throw tr('send.addressChanged');
     // One key per prepared send, reused by every run of it: the SDK pays once per key and hands back the stored payment on a repeat.
     final sendKey = key ?? newIdempotencyKey();
     _onchainKey = sendKey;
@@ -324,12 +325,12 @@ class _SendSheetState extends State<SendSheet> {
     _exec = () async {
       final q = _quote;
       // Nothing has been sent yet here, so this one is a plain failure.
-      if (q == null || onchainQuoteExpired(q)) throw 'A cotação da taxa expirou. Feche e refaça o envio.';
+      if (q == null || onchainQuoteExpired(q)) throw tr('send.quoteExpired');
       // Written down BEFORE the send: if the app dies or the sheet goes away mid-send, the next on-chain send finds this and asks first.
       try {
         await widget.pending.reserve(OnchainPending(key: sendKey, address: address, sats: sats));
       } catch (e) {
-        throw 'Não consegui registrar o envio, nada foi enviado ($e)';
+        throw tr('send.notRecorded', {'e': e});
       }
       final breez.Payment payment;
       try {
@@ -407,9 +408,9 @@ class _SendSheetState extends State<SendSheet> {
         // the speed the user picked survives the new quote; the fee shown follows it
         _speed = picked;
         _fee = BigInt.from(onchainFeeSats(_quote!, picked));
-        if (mounted) setState(() => _error = 'A cotação da taxa expirou e foi atualizada. Confira a taxa e confirme de novo.');
+        if (mounted) setState(() => _error = tr('send.quoteRefreshed'));
       } catch (e) {
-        if (mounted) setState(() => _error = 'A cotação da taxa expirou: $e');
+        if (mounted) setState(() => _error = tr('send.quoteExpiredE', {'e': e}));
       } finally {
         if (mounted) setState(() => _working = false);
       }
@@ -428,12 +429,12 @@ class _SendSheetState extends State<SendSheet> {
       final s = p?.status;
       _ok = s != breez.PaymentStatus.failed;
       _result = s == null
-          ? 'Enviado, aguardando confirmação'
+          ? tr('send.sentWaiting')
           : s == breez.PaymentStatus.completed
-          ? (_verb == 'resgatar' ? 'Resgate concluído' : 'Pagamento enviado')
+          ? (_verb == 'resgatar' ? tr('send.redeemed') : tr('send.paid'))
           : s == breez.PaymentStatus.pending
-          ? 'Processando'
-          : 'Falhou';
+          ? tr('send.processing')
+          : tr('send.failed');
     } on UnconfirmedSend catch (e) {
       _ok = false;
       _unconfirmed = true;
@@ -455,34 +456,34 @@ class _SendSheetState extends State<SendSheet> {
       case _Step.input:
         return Column(
           children: [
-            const SheetTitle('Enviar ou resgatar', Icons.arrow_upward),
+            SheetTitle(tr('send.title'), Icons.arrow_upward),
             const SizedBox(height: 20),
             TextField(
               controller: _input,
               minLines: 3,
               maxLines: 3,
               style: const TextStyle(fontFamily: monoFamily, fontSize: 14),
-              decoration: const InputDecoration(hintText: 'Fatura (lnbc...), voucher (LNURL1...) ou user@dominio'),
+              decoration: InputDecoration(hintText: tr('send.inputHint')),
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(child: OutlineButton(label: 'Colar', icon: Icons.content_paste, onPressed: _paste)),
+                Expanded(child: OutlineButton(label: tr('common.paste'), icon: Icons.content_paste, onPressed: _paste)),
                 const SizedBox(width: 10),
-                Expanded(child: OutlineButton(label: 'Escanear', icon: Icons.qr_code_scanner, onPressed: _scan)),
+                Expanded(child: OutlineButton(label: tr('common.scan'), icon: Icons.qr_code_scanner, onPressed: _scan)),
               ],
             ),
             if (_error != null) _Err(_error!),
             const SizedBox(height: 16),
-            GradientButton(label: _working ? 'Lendo...' : 'Continuar', onPressed: _working ? null : _continue),
+            GradientButton(label: _working ? tr('send.reading') : tr('common.continue'), onPressed: _working ? null : _continue),
             const SizedBox(height: 10),
-            TextButton(onPressed: _working ? null : () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: C.muted))),
+            TextButton(onPressed: _working ? null : () => Navigator.pop(context), child: Text(tr('common.cancel'), style: const TextStyle(color: C.muted))),
           ],
         );
       case _Step.amount:
         return Column(
           children: [
-            const SheetTitle('Quanto enviar?', Icons.arrow_upward),
+            SheetTitle(tr('send.howMuch'), Icons.arrow_upward),
             const SizedBox(height: 8),
             Text(_amountFor, style: const TextStyle(color: C.muted, fontFamily: monoFamily, fontSize: 13)),
             const SizedBox(height: 16),
@@ -514,22 +515,22 @@ class _SendSheetState extends State<SendSheet> {
                   ),
               ],
             ),
-            const Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: Text('Mínimo de $minPaymentSats sats por pagamento.', style: TextStyle(color: C.muted, fontSize: 12)),
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(tr('send.minimum', {'n': minPaymentSats}), style: const TextStyle(color: C.muted, fontSize: 12)),
             ),
             if (_error != null) _Err(_error!),
             const SizedBox(height: 16),
-            GradientButton(label: _working ? 'Calculando...' : 'Continuar', onPressed: _working ? null : _submitAmount),
+            GradientButton(label: _working ? tr('send.calculating') : tr('common.continue'), onPressed: _working ? null : _submitAmount),
             const SizedBox(height: 10),
-            TextButton(onPressed: _working ? null : () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: C.muted))),
+            TextButton(onPressed: _working ? null : () => Navigator.pop(context), child: Text(tr('common.cancel'), style: const TextStyle(color: C.muted))),
           ],
         );
       case _Step.confirm:
         final resgate = _verb == 'resgatar';
         return Column(
           children: [
-            Text(resgate ? 'Você vai resgatar' : 'Você vai enviar', style: const TextStyle(color: C.textSec, fontSize: 14)),
+            Text(resgate ? tr('send.youWillRedeem') : tr('send.youWillSend'), style: const TextStyle(color: C.textSec, fontSize: 14)),
             const SizedBox(height: 6),
             Text(
               '${fmtSats(_sats.toInt() + (resgate ? 0 : _fee.toInt()))} sats',
@@ -543,15 +544,15 @@ class _SendSheetState extends State<SendSheet> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Para', style: TextStyle(color: C.muted, fontSize: 13)),
+                        Text(tr('common.to'), style: const TextStyle(color: C.muted, fontSize: 13)),
                         const SizedBox(height: 4),
                         SelectableText(_dest, key: const Key('full-address'), style: const TextStyle(fontFamily: monoFamily, fontSize: 13)),
                       ],
                     )
                   else
-                    RowKV(resgate ? 'Voucher' : 'Para', _dest),
+                    RowKV(resgate ? tr('send.voucher') : tr('common.to'), _dest),
                   const Divider(height: 8),
-                  RowKV('Valor', '${fmtSats(_sats.toInt())} sats'),
+                  RowKV(tr('common.amount'), '${fmtSats(_sats.toInt())} sats'),
                   if (_quote != null) ...[
                     const Divider(height: 8),
                     Row(
@@ -574,32 +575,32 @@ class _SendSheetState extends State<SendSheet> {
                       ],
                     ),
                   ],
-                  if (!resgate) RowKV('Taxa de rede', '${fmtSats(_fee.toInt())} sats'),
-                  if (!resgate) RowKV('Total', '${fmtSats(_sats.toInt() + _fee.toInt())} sats', strong: true),
+                  if (!resgate) RowKV(tr('send.networkFee'), '${fmtSats(_fee.toInt())} sats'),
+                  if (!resgate) RowKV(tr('send.total'), '${fmtSats(_sats.toInt() + _fee.toInt())} sats', strong: true),
                 ],
               ),
             ),
             if (_error != null) _Err(_error!),
             const SizedBox(height: 20),
             GradientButton(
-              label: resgate ? 'Resgatar' : 'Enviar',
+              label: resgate ? tr('send.redeem') : tr('btn.send'),
               colors: resgate ? const [C.success, Color(0xFF059669)] : const [C.electric, Color(0xFF0099CC)],
               onPressed: _run,
             ),
             const SizedBox(height: 10),
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: C.muted))),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('common.cancel'), style: const TextStyle(color: C.muted))),
           ],
         );
       case _Step.pending:
         final r = _open;
         return Column(
           children: [
-            const SheetTitle('Envio em aberto', Icons.help_outline),
+            SheetTitle(tr('send.openTitle'), Icons.help_outline),
             const SizedBox(height: 12),
-            const Text(
-              'Um envio on-chain anterior não teve resultado confirmado. Se ele saiu e você enviar outro, o valor sai duas vezes. Confira o histórico.',
+            Text(
+              tr('send.openBody'),
               textAlign: TextAlign.center,
-              style: TextStyle(color: C.textSec, fontSize: 14),
+              style: const TextStyle(color: C.textSec, fontSize: 14),
             ),
             const SizedBox(height: 14),
             if (r != null)
@@ -607,9 +608,9 @@ class _SendSheetState extends State<SendSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    RowKV('Valor', '${fmtSats(r.sats)} sats'),
+                    RowKV(tr('common.amount'), '${fmtSats(r.sats)} sats'),
                     const Divider(height: 8),
-                    const Text('Para', style: TextStyle(color: C.muted, fontSize: 13)),
+                    Text(tr('common.to'), style: const TextStyle(color: C.muted, fontSize: 13)),
                     const SizedBox(height: 4),
                     SelectableText(r.address, key: const Key('pending-address'), style: const TextStyle(fontFamily: monoFamily, fontSize: 13)),
                   ],
@@ -617,24 +618,24 @@ class _SendSheetState extends State<SendSheet> {
               ),
             if (_error != null) _Err(_error!),
             const SizedBox(height: 16),
-            GradientButton(label: 'Conferir de novo', onPressed: _working ? null : _recheck),
+            GradientButton(label: tr('send.recheck'), onPressed: _working ? null : _recheck),
             const SizedBox(height: 8),
-            OutlineButton(label: 'Tentar de novo com a mesma chave', icon: Icons.replay, onPressed: _working ? null : _resume),
+            OutlineButton(label: tr('send.resume'), icon: Icons.replay, onPressed: _working ? null : _resume),
             const SizedBox(height: 8),
-            TextButton(key: const Key('discard'), onPressed: _working ? null : _discard, child: const Text('Descartar o registro', style: TextStyle(color: C.warn))),
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar', style: TextStyle(color: C.muted))),
+            TextButton(key: const Key('discard'), onPressed: _working ? null : _discard, child: Text(tr('send.discardRecord'), style: const TextStyle(color: C.warn))),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('common.close'), style: const TextStyle(color: C.muted))),
           ],
         );
       case _Step.busy:
-        return const Padding(
-          padding: EdgeInsets.symmetric(vertical: 48),
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 48),
           child: Column(
             children: [
-              SizedBox(width: 72, height: 72, child: CircularProgressIndicator(strokeWidth: 3, color: C.primaryLight)),
-              SizedBox(height: 24),
-              Text('Enviando...', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-              SizedBox(height: 6),
-              Text('Não feche o aplicativo', style: TextStyle(color: C.textSec, fontSize: 14)),
+              const SizedBox(width: 72, height: 72, child: CircularProgressIndicator(strokeWidth: 3, color: C.primaryLight)),
+              const SizedBox(height: 24),
+              Text(tr('send.sending'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              Text(tr('send.keepOpen'), style: const TextStyle(color: C.textSec, fontSize: 14)),
             ],
           ),
         );
@@ -661,7 +662,7 @@ class _SendSheetState extends State<SendSheet> {
                   child: Text(_detail, textAlign: TextAlign.center, style: const TextStyle(color: C.muted, fontSize: 12)),
                 ),
               const SizedBox(height: 24),
-              GradientButton(label: 'Concluir', onPressed: () => Navigator.pop(context, true)),
+              GradientButton(label: tr('common.done'), onPressed: () => Navigator.pop(context, true)),
             ],
           ),
         );

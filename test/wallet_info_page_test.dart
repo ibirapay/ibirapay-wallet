@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wallet/app_lock.dart';
 import 'package:wallet/chain_balances.dart' show rpcRoute;
+import 'package:wallet/i18n.dart';
 import 'package:wallet/pending_sends.dart';
 import 'package:wallet/theme.dart';
 import 'package:wallet/wallet.dart';
@@ -35,6 +38,7 @@ void main() {
   late AppLock lock;
   late WalletOps ops;
   late List<bool> secure;
+  late Directory langDir;
 
   Future<void> Function(bool)? secureHook;
 
@@ -42,6 +46,11 @@ void main() {
     t.view.physicalSize = const Size(800, 2600);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
+    langDir = Directory.systemTemp.createTempSync('lang');
+    addTearDown(() {
+      lang.value = Lang.pt;
+      langDir.deleteSync(recursive: true);
+    });
     store = MemorySecretStore();
     store.map[walletWordsKey] = _words.join(' ');
     secure = [];
@@ -69,10 +78,58 @@ void main() {
           lock: lock,
           ops: ops,
           balanceLines: ValueNotifier(const ['1 000 sats']),
+          langPrefs: LangPrefs(langDir),
         ),
       ),
     );
     await t.pump();
+  }
+
+  testWidgets('the language choice: three languages named in their own tongue, tapping one switches the page now and saves it', (t) async {
+    await pump(t);
+    // the save is real file IO: let the real clock run before reading the file back
+    Future<Lang?> saved(String phone) async {
+      for (var i = 0; i < 4; i++) {
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await t.pump(); // the pending save continues in the test's fake zone only when it pumps
+      }
+      return t.runAsync(() => LangPrefs(langDir).load(phone: phone));
+    }
+    expect(find.text('Idioma'), findsOneWidget);
+    for (final l in ['Português', 'English', 'Español']) {
+      expect(find.text(l), findsOneWidget);
+    }
+    await t.tap(find.byKey(const Key('lang-en')));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
+    expect(lang.value, Lang.en);
+    expect(find.text('Language'), findsOneWidget);
+    expect(find.text('Idioma'), findsNothing);
+    expect(await saved('pt'), Lang.en, reason: 'saved, so a restart keeps it even if the phone says pt');
+    await t.tap(find.byKey(const Key('lang-es')));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 300));
+    expect(find.text('Idioma'), findsOneWidget);
+    expect(await saved('en'), Lang.es);
+  });
+
+  for (final l in Lang.values) {
+    testWidgets('the Carteira page and the delete screen fit a narrow phone in ${l.label}, with every text in that language', (t) async {
+      await pump(t);
+      setLang(l);
+      t.view.physicalSize = const Size(360, 800);
+      await t.pump();
+      expect(t.takeException(), isNull, reason: 'no overflow on the page');
+      expect(find.text(tr('info.title')), findsOneWidget);
+      expect(find.text(tr('info.addresses')), findsOneWidget);
+      expect(find.text(tr('info.words')), findsOneWidget);
+      expect(find.text(tr('info.risk')), findsOneWidget);
+      await t.tap(find.text(tr('del.title')));
+      await _settle(t);
+      expect(t.takeException(), isNull, reason: 'no overflow on the delete screen');
+      expect(find.text(tr('del.warn')), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+    });
   }
 
   testWidgets('the 12 words are hidden, and showing them asks the PIN: wrong keeps them hidden, right shows them', (t) async {

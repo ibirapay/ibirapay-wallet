@@ -4,6 +4,7 @@ import 'dart:math' show Random;
 import 'package:breez_sdk_spark_flutter/breez_sdk_spark.dart' as breez;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wallet/i18n.dart';
 import 'package:wallet/onchain.dart';
 import 'package:wallet/send_sheet.dart';
 import 'package:wallet/theme.dart' show fmtSats;
@@ -155,6 +156,22 @@ Future<void> _openInSheet(WidgetTester t, _FakeSdk sdk, OnchainPendingStore stor
     _openSend(t, sdk, pin: () async => true, pending: store);
 
 void main() {
+  test('the on-chain messages follow the language, and the never-a-plain-failure warning is said in all three', () {
+    addTearDown(() => lang.value = Lang.pt);
+    final seen = <String>{};
+    for (final l in Lang.values) {
+      lang.value = l;
+      seen.add(unconfirmedSendMessage);
+      expect({for (final s in breez.OnchainConfirmationSpeed.values) speedLabel(s)}, hasLength(3), reason: '${l.name}: three different speeds');
+      expect(networkError(breez.BitcoinNetwork.regtest), contains(breez.BitcoinNetwork.regtest.name));
+    }
+    expect(seen, hasLength(3));
+    lang.value = Lang.en;
+    expect(unconfirmedSendMessage, contains('check the history'));
+    lang.value = Lang.es;
+    expect(unconfirmedSendMessage, contains('revisa el historial'));
+  });
+
   group('helpers', () {
     test('fee of a speed = our fee + L1 broadcast fee', () {
       final q = _quote();

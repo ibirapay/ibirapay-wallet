@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import 'i18n.dart';
 import 'limits.dart';
 import 'secret_store.dart';
 import 'theme.dart';
@@ -29,7 +30,7 @@ String newIdempotencyKey([Random? random]) {
 
 /// Why an address cannot be paid by this wallet, or null. Spark would refuse another network at send time, after the fee quote and the PIN.
 String? networkError(breez.BitcoinNetwork n) =>
-    n == breez.BitcoinNetwork.bitcoin ? null : 'Endereço de outra rede (${n.name}). Use um endereço Bitcoin da rede principal.';
+    n == breez.BitcoinNetwork.bitcoin ? null : tr('onc.wrongNetwork', {'net': n.name});
 
 /// The send may have gone out although the SDK threw (it can fail after the provider accepted it). Never shown as a plain failure:
 /// a retry from here could pay twice.
@@ -40,7 +41,7 @@ class UnconfirmedSend implements Exception {
   String toString() => detail;
 }
 
-const unconfirmedSendMessage = 'Não confirmado - confira o histórico antes de reenviar';
+String get unconfirmedSendMessage => tr('onc.unconfirmed');
 
 /// SDK errors that prove the exit was NOT started (the SDK checks these before it asks the provider for anything). Every other
 /// error after the send began may have come after the provider accepted it.
@@ -117,22 +118,22 @@ bool onchainQuoteExpired(breez.SendOnchainFeeQuote q, {DateTime? now, int margin
 }
 
 String speedLabel(breez.OnchainConfirmationSpeed s) => switch (s) {
-  breez.OnchainConfirmationSpeed.fast => 'Rápido',
-  breez.OnchainConfirmationSpeed.medium => 'Médio',
-  breez.OnchainConfirmationSpeed.slow => 'Lento',
+  breez.OnchainConfirmationSpeed.fast => tr('onc.fast'),
+  breez.OnchainConfirmationSpeed.medium => tr('onc.medium'),
+  breez.OnchainConfirmationSpeed.slow => tr('onc.slow'),
 };
 
 /// What the user should read for one unclaimed deposit.
 String depositStatus(breez.DepositInfo d) {
   final e = d.claimError;
   if (e is breez.DepositClaimError_MaxDepositClaimFeeExceeded) {
-    return 'Taxa de rede acima do limite (precisa de ${e.requiredFeeSats} sats). Tente de novo quando baixar.';
+    return tr('onc.feeAboveLimit', {'n': e.requiredFeeSats});
   }
-  if (e is breez.DepositClaimError_DepositTooSmall) return 'Valor pequeno demais para ser resgatado (a taxa passa do valor).';
-  if (e is breez.DepositClaimError_MissingUtxo) return 'Transação ainda não encontrada na rede.';
-  if (e is breez.DepositClaimError_Generic) return 'Não foi possível resgatar agora: ${e.message}';
-  if (!d.isMature) return 'Aguardando $depositConfirmations confirmações';
-  return 'Confirmado, resgatando...';
+  if (e is breez.DepositClaimError_DepositTooSmall) return tr('onc.tooSmall');
+  if (e is breez.DepositClaimError_MissingUtxo) return tr('onc.noTx');
+  if (e is breez.DepositClaimError_Generic) return tr('onc.cannotClaim', {'e': e.message});
+  if (!d.isMature) return tr('onc.waiting', {'n': depositConfirmations});
+  return tr('onc.confirmed');
 }
 
 /// The fee (sats) the SDK says a refused claim needs, or null when the deposit did not fail on the fee ceiling.
@@ -222,7 +223,7 @@ class _OnchainReceiveViewState extends State<OnchainReceiveView> {
       _poll = Timer.periodic(widget.pollEvery, (_) => _check());
       await _check();
     } catch (e) {
-      if (mounted) setState(() => _error = 'Erro ao criar o endereço: $e');
+      if (mounted) setState(() => _error = tr('onc.addressErr', {'e': e}));
     }
   }
 
@@ -268,11 +269,11 @@ class _OnchainReceiveViewState extends State<OnchainReceiveView> {
       await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
-          title: const Text('Pagar a taxa de rede?'),
-          content: Text('Resgatar este depósito de ${fmtSats(d.amountSats.toInt())} sats custa ${fmtSats(fee)} sats de taxa de rede, descontados do valor.'),
+          title: Text(tr('onc.payFeeTitle')),
+          content: Text(tr('onc.payFeeBody', {'amount': fmtSats(d.amountSats.toInt()), 'fee': fmtSats(fee)})),
           actions: [
-            TextButton(key: const Key('claim-fee-cancel'), onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
-            TextButton(key: const Key('claim-fee-confirm'), onPressed: () => Navigator.pop(c, true), child: const Text('Pagar e resgatar')),
+            TextButton(key: const Key('claim-fee-cancel'), onPressed: () => Navigator.pop(c, false), child: Text(tr('common.cancel'))),
+            TextButton(key: const Key('claim-fee-confirm'), onPressed: () => Navigator.pop(c, true), child: Text(tr('onc.payAndClaim'))),
           ],
         ),
       ) ??
@@ -300,7 +301,7 @@ class _OnchainReceiveViewState extends State<OnchainReceiveView> {
         SelectableText(a, textAlign: TextAlign.center, style: const TextStyle(fontFamily: monoFamily, fontSize: 12, color: C.primaryLight)),
         const SizedBox(height: 12),
         GradientButton(
-          label: _copied ? 'Copiado!' : 'Copiar endereço',
+          label: _copied ? tr('recv.copied') : tr('onc.copyAddress'),
           icon: Icons.copy,
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: a));
@@ -309,8 +310,7 @@ class _OnchainReceiveViewState extends State<OnchainReceiveView> {
         ),
         const SizedBox(height: 10),
         Text(
-          'Só envie Bitcoin (rede principal). O saldo entra depois de $depositConfirmations confirmações, mesmo com o app fechado. '
-          'A taxa de resgate sai do valor depositado. Mínimo: $minPaymentSats sats mais a taxa.',
+          tr('onc.note', {'n': depositConfirmations, 'min': minPaymentSats}),
           textAlign: TextAlign.center,
           style: const TextStyle(color: C.muted, fontSize: 12),
         ),
@@ -322,14 +322,14 @@ class _OnchainReceiveViewState extends State<OnchainReceiveView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  RowKV('Depósito', '${fmtSats(d.amountSats.toInt())} sats', strong: true),
+                  RowKV(tr('onc.deposit'), '${fmtSats(d.amountSats.toInt())} sats', strong: true),
                   Text(depositStatus(d), key: const Key('deposit-status'), style: const TextStyle(color: C.muted, fontSize: 12)),
                   if (depositCanRetry(d))
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
                         onPressed: () => _retry(d),
-                        child: Text(depositFeeNeeded(d) == null ? 'Tentar de novo' : 'Resgatar pagando ${fmtSats(depositFeeNeeded(d)!)} sats'),
+                        child: Text(depositFeeNeeded(d) == null ? tr('main.retry') : tr('onc.claimPaying', {'fee': fmtSats(depositFeeNeeded(d)!)})),
                       ),
                     ),
                 ],

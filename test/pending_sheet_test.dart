@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wallet/i18n.dart';
 import 'package:wallet/pending_sends.dart';
 import 'package:wallet/pending_sheet.dart';
 import 'package:wallet/stable_send.dart';
@@ -90,6 +91,21 @@ Future<({MemoryPendingStore store, List<String?> told, _Node node})> _open(Widge
 }
 
 void main() {
+  for (final l in Lang.values) {
+    testWidgets('the open-send sheet fits a narrow phone in ${l.label} and still says not to send again', (t) async {
+      addTearDown(() => lang.value = Lang.pt);
+      lang.value = l;
+      await _open(t, _poly());
+      t.view.physicalSize = const Size(360, 800);
+      await t.pump();
+      expect(t.takeException(), isNull);
+      expect(find.text(tr('pend.title')), findsOneWidget);
+      expect(find.text(tr('pend.body')), findsOneWidget);
+      expect(tr('pend.body'), contains(l == Lang.pt ? 'Não envie de novo' : l == Lang.en ? 'Do not send again' : 'No envíes de nuevo'));
+      expect(find.text(tr('pend.cancelSend')), findsOneWidget);
+    });
+  }
+
   testWidgets('Polygon: shows what the send was, warns not to send again, offers a cancel and no free discard', (t) async {
     await _open(t, _poly());
     expect(find.text('Envio em aberto'), findsOneWidget);

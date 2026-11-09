@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'base58.dart';
 import 'chain_balances.dart';
 import 'evm_tx.dart';
+import 'i18n.dart';
 import 'pending_sends.dart';
 import 'sol_tx.dart';
 import 'wallet_seed.dart';
@@ -62,17 +63,17 @@ bool isStale(PendingSend r) => DateTime.now().millisecondsSinceEpoch - r.created
 /// in pt-BR and one in en-US, so it is refused instead of guessed.
 BigInt parseStableAmount(String text) {
   final t = text.trim();
-  if (t.isEmpty) throw SendError('Digite um valor');
+  if (t.isEmpty) throw SendError(tr('st.enterAmount'));
   final m = RegExp(r'^(\d+)(?:[.,](\d+))?$').firstMatch(t);
-  if (m == null) throw SendError('Valor inválido: use só números e uma vírgula ou ponto');
+  if (m == null) throw SendError(tr('st.badAmount'));
   final frac = m[2] ?? '';
-  if (frac.length > stableDecimals6) throw SendError('No máximo $stableDecimals6 casas decimais');
+  if (frac.length > stableDecimals6) throw SendError(tr('st.decimals', {'n': stableDecimals6}));
   if (frac.length == 3 && m[1]!.length <= 3 && !m[1]!.startsWith('0')) {
     final decimal = frac.replaceFirst(RegExp(r'0+$'), '');
-    throw SendError('Valor ambíguo: "$t" pode ser ${m[1]}$frac ou ${m[1]},${decimal.isEmpty ? '0' : decimal}. Digite um dos dois sem o separador do meio');
+    throw SendError(tr('st.ambiguous', {'t': t, 'a': '${m[1]}$frac', 'b': '${m[1]}${decimalSeparator()}${decimal.isEmpty ? '0' : decimal}'}));
   }
   final v = BigInt.parse(m[1]!) * BigInt.from(10).pow(stableDecimals6) + BigInt.parse(frac.padRight(stableDecimals6, '0'));
-  if (v == BigInt.zero) throw SendError('O valor precisa ser maior que zero');
+  if (v == BigInt.zero) throw SendError(tr('st.zero'));
   return v;
 }
 
@@ -83,7 +84,7 @@ String fmtUnits(BigInt raw, int decimals, {int minPlaces = 2}) {
   while (frac.length > minPlaces && frac.endsWith('0')) {
     frac = frac.substring(0, frac.length - 1);
   }
-  return '${raw ~/ base},$frac';
+  return '${raw ~/ base}${decimalSeparator()}$frac';
 }
 
 // ---- recipient parsing
@@ -98,29 +99,29 @@ final _evmInput = RegExp(r'^(?:ethereum:|polygon:)?(?:pay-)?(0x[0-9a-fA-F]{40})(
 /// contract itself.
 String parsePolygonRecipient(String input, {String? token}) {
   final m = _evmInput.firstMatch(input.trim());
-  if (m == null) throw SendError('Endereço inválido. Um endereço Polygon começa com 0x e tem 42 caracteres');
+  if (m == null) throw SendError(tr('st.badPolygon'));
   final chain = m[2];
   if (chain != null && int.parse(chain) != polygonChainId) {
-    throw SendError('Esse QR é para outra rede (cadeia $chain), não para a Polygon. Nada foi enviado');
+    throw SendError(tr('st.qrOtherChain', {'chain': chain}));
   }
   var a = m[1]!;
   final function = m[3];
   if (function != null) {
-    if (function != 'transfer') throw SendError('Esse QR chama uma função ("$function") que o app não suporta. Nada foi enviado');
+    if (function != 'transfer') throw SendError(tr('st.qrFunction', {'fn': function}));
     if (token == null || a.toLowerCase() != token.toLowerCase()) {
-      throw SendError('Esse QR pede o pagamento em outro token ou contrato, não no que você escolheu. Nada foi enviado');
+      throw SendError(tr('st.qrOtherToken'));
     }
     final to = RegExp(r'(?:^|&)address=(0x[0-9a-fA-F]{40})(?:&|$)', caseSensitive: false).firstMatch(m[4] ?? '');
-    if (to == null) throw SendError('Esse QR de pagamento de token não traz o endereço do destinatário. Nada foi enviado');
+    if (to == null) throw SendError(tr('st.qrNoRecipient'));
     a = to[1]!;
   }
   final body = a.substring(2);
   final mixed = body != body.toLowerCase() && body != body.toUpperCase();
   final checksummed = checksumEvmAddress(a);
-  if (mixed && checksummed != a) throw SendError('O endereço tem um erro de digitação (a soma de verificação não confere)');
-  if (RegExp(r'^0x0{40}$').hasMatch(a)) throw SendError('Esse é o endereço zero: tudo que for enviado para ele se perde');
+  if (mixed && checksummed != a) throw SendError(tr('st.typo'));
+  if (RegExp(r'^0x0{40}$').hasMatch(a)) throw SendError(tr('st.zeroAddress'));
   if (polygonTokens.values.any((c) => c.toLowerCase() == a.toLowerCase())) {
-    throw SendError('Esse endereço é o contrato de um token: enviar para ele perde os fundos');
+    throw SendError(tr('st.tokenContract'));
   }
   return checksummed;
 }
@@ -132,7 +133,7 @@ String parseSolanaRecipient(String input) {
   try {
     solPubkey(t);
   } on FormatException {
-    throw SendError('Endereço inválido. Um endereço Solana tem de 32 a 44 letras e números');
+    throw SendError(tr('st.badSolana'));
   }
   return t;
 }
@@ -220,7 +221,7 @@ class StableSender {
     try {
       return await op();
     } catch (_) {
-      throw SendError('Não consegui acessar o registro de envios do aparelho. Nada foi enviado');
+      throw SendError(tr('st.noRegistry'));
     }
   }
 
@@ -237,9 +238,9 @@ class StableSender {
     try {
       return token.net == Net.polygon ? await _quotePolygon(token, from, to, amount) : await _quoteSolana(token, from, to, amount);
     } on RpcError catch (e) {
-      throw SendError('A rede recusou a consulta: ${e.message}');
+      throw SendError(tr('st.queryRefused', {'e': e.message}));
     } on StateError {
-      throw SendError('Nenhum nó da ${token.netName} respondeu. Verifique a internet e tente de novo');
+      throw SendError(tr('st.noNodeRetry', {'net': token.netName}));
     }
   }
 
@@ -249,22 +250,22 @@ class StableSender {
     try {
       final open = (await _stored(store.all)).where((r) => r.net == q.token.net.name);
       if (open.isNotEmpty) {
-        throw SendError('Há um envio em aberto na ${q.token.netName}. Confira o resultado dele (aviso na tela inicial) antes de enviar de novo');
+        throw SendError(tr('st.openSend', {'net': q.token.netName}));
       }
       return q.token.net == Net.polygon ? await _submitPolygon(q, words) : await _submitSolana(q, words);
-    } on WalletError catch (e) {
-      throw SendError(e.message);
+    } on WalletError {
+      throw SendError(tr('st.internal')); // e.message is a developer text (Portuguese): not shown
     } on RpcError catch (e) {
-      throw SendError('A rede recusou: ${e.message}. Nada foi enviado');
+      throw SendError(tr('st.netRefusedNothing', {'e': e.message}));
     } on StateError {
-      throw SendError('Nenhum nó da ${q.token.netName} respondeu. Nada foi enviado');
+      throw SendError(tr('st.noNodeNothing', {'net': q.token.netName}));
     }
   }
 
   /// Takes the network's one slot for this send, in one atomic step; if another send got it first, nothing is broadcast.
   Future<void> _reserve(Quote q, PendingSend rec) async {
     if (!await _stored(() => store.putIfNoneOpen(q.token.net.name, rec))) {
-      throw SendError('Há um envio em aberto na ${q.token.netName}. Confira o resultado dele (aviso na tela inicial) antes de enviar de novo');
+      throw SendError(tr('st.openSend', {'net': q.token.netName}));
     }
   }
 
@@ -304,7 +305,7 @@ class StableSender {
   /// The priority fee (the network's 25 gwei floor, or the node's if higher) and the max fee (twice the base fee, plus the tip).
   Future<({BigInt tip, BigInt maxFee})> _polygonFees() async {
     final block = await _poly('eth_getBlockByNumber', ['latest', false]) as Map;
-    if (block['baseFeePerGas'] == null) throw SendError('O nó da Polygon não informou a taxa base. Tente de novo');
+    if (block['baseFeePerGas'] == null) throw SendError(tr('st.noBaseFee'));
     final baseFee = _hb(block['baseFeePerGas']);
     var tip = _polygonTipFloor;
     try {
@@ -319,12 +320,12 @@ class StableSender {
   Future<Quote> _quotePolygon(StableToken token, String from, String toInput, BigInt amount) async {
     final to = parsePolygonRecipient(toInput, token: token.id);
     if (_hb(await _poly('eth_chainId', const [])) != BigInt.from(polygonChainId)) {
-      throw SendError('O nó respondeu de outra rede, não da Polygon. Nada foi enviado');
+      throw SendError(tr('st.wrongChainNode'));
     }
     final balanceData = '0x70a08231${from.toLowerCase().replaceFirst('0x', '').padLeft(64, '0')}';
     final balance = _hb(await _poly('eth_call', [{'to': token.id, 'data': balanceData}, 'latest']));
     if (amount > balance) {
-      throw SendError('Saldo insuficiente de ${token.symbol} na Polygon: você tem ${fmtUnits(balance, stableDecimals6)}');
+      throw SendError(tr('st.lowBalancePoly', {'sym': token.symbol, 'have': fmtUnits(balance, stableDecimals6)}));
     }
     final pol = _hb(await _poly('eth_getBalance', [from, 'latest']));
     final (:tip, :maxFee) = await _polygonFees();
@@ -333,15 +334,12 @@ class StableSender {
     try {
       estimate = _hb(await _poly('eth_estimateGas', [{'from': from, 'to': token.id, 'data': data}]));
     } on RpcError catch (e) {
-      throw SendError('A Polygon recusou a transferência: ${e.message}');
+      throw SendError(tr('st.polyRefusedTransfer', {'e': e.message}));
     }
     final gasLimit = (estimate * BigInt.from(125) ~/ BigInt.from(100)).toInt();
     final fee = maxFee * BigInt.from(gasLimit);
     if (pol < fee) {
-      throw SendError(
-        'POL insuficiente para o gás: precisa de até ${fmtUnits(fee, 18, minPlaces: 4)} POL e você tem ${fmtUnits(pol, 18, minPlaces: 4)}. '
-        'Mande um pouco de POL para o seu endereço Polygon',
-      );
+      throw SendError(tr('st.lowPol', {'need': fmtUnits(fee, 18, minPlaces: 4), 'have': fmtUnits(pol, 18, minPlaces: 4)}));
     }
     return Quote._(
       token: token,
@@ -352,7 +350,7 @@ class StableSender {
       fee: fee,
       gasBalance: pol,
       rent: BigInt.zero,
-      warnings: [if (to == checksumEvmAddress(from)) 'O destino é a sua própria carteira'],
+      warnings: [if (to == checksumEvmAddress(from)) tr('st.ownWallet')],
       plan: _EvmPlan(tip, maxFee, gasLimit),
     );
   }
@@ -403,7 +401,7 @@ class StableSender {
         // only "taken" evidence matters, and ANY node's word counts: an earlier node may have taken it without our hearing
         // (ambiguous), or another node may already know it, or the refusal is about the nonce itself
         if (e.ambiguous || [e.message, ...e.messages].any(_nonceTalk.hasMatch)) return pending;
-        throw SendError('A Polygon recusou o envio: ${e.message}');
+        throw SendError(tr('st.polyRefusedSend', {'e': e.message}));
       }
     } on StateError {
       // no node answered: it may still have been delivered to one of them
@@ -501,14 +499,14 @@ class StableSender {
     final held = await _sourceAccounts(owner, mint, from, token, amount);
     final accounts = held.where((a) => a.state == 'initialized').toList()..sort((a, b) => b.amount.compareTo(a.amount));
     if (accounts.isEmpty && held.any((a) => a.amount > BigInt.zero)) {
-      throw SendError('Sua conta de ${token.symbol} na Solana está congelada pelo emissor do token: não dá para enviar daqui');
+      throw SendError(tr('st.frozenOwn', {'sym': token.symbol}));
     }
     final total = accounts.fold(BigInt.zero, (s, a) => s + a.amount);
     if (accounts.isEmpty || total < amount) {
-      throw SendError('Saldo insuficiente de ${token.symbol} na Solana: você tem ${fmtUnits(total, stableDecimals6)}');
+      throw SendError(tr('st.lowBalanceSol', {'sym': token.symbol, 'have': fmtUnits(total, stableDecimals6)}));
     }
     if (accounts.first.amount < amount) {
-      throw SendError('Seu saldo de ${token.symbol} está dividido em várias contas e nenhuma tem o valor todo. Envie um valor menor');
+      throw SendError(tr('st.splitAccounts', {'sym': token.symbol}));
     }
     final source = solPubkey(accounts.first.pubkey);
 
@@ -526,19 +524,19 @@ class StableSender {
       } else {
         final parsed = ataInfo['data'] is Map ? ataInfo['data']['parsed'] : null;
         final okAccount = ataInfo['owner'] == tokenProgramId && parsed is Map && parsed['info']['mint'] == token.id && parsed['info']['state'] == 'initialized';
-        if (!okAccount) throw SendError('A conta de ${token.symbol} desse endereço está congelada ou inválida. Nada foi enviado');
+        if (!okAccount) throw SendError(tr('st.destFrozenOrInvalid', {'sym': token.symbol}));
       }
     } else if (owningProgram == tokenProgramId) {
       final parsed = info['data'] is Map ? info['data']['parsed'] : null;
       if (parsed is! Map || parsed['type'] != 'account' || parsed['info']['mint'] != token.id) {
-        throw SendError('Esse endereço é uma conta de token de outra moeda. Use o endereço da carteira do destinatário');
+        throw SendError(tr('st.otherTokenAccount'));
       }
-      if (parsed['info']['state'] != 'initialized') throw SendError('A conta de ${token.symbol} desse endereço está congelada. Nada foi enviado');
+      if (parsed['info']['state'] != 'initialized') throw SendError(tr('st.destFrozen', {'sym': token.symbol}));
       dest = recipient;
     } else {
-      throw SendError('Esse endereço não é uma carteira (pertence a um programa). Nada foi enviado');
+      throw SendError(tr('st.notWallet'));
     }
-    if (to == from) warnings.add('O destino é a sua própria carteira');
+    if (to == from) warnings.add(tr('st.ownWallet'));
 
     final plan = _SolPlan(source, dest, createOwner);
     final bh = await _blockhash();
@@ -556,14 +554,13 @@ class StableSender {
     final sol = BigInt.from(await _lamports(from));
     if (sol < fee + rent) {
       throw SendError(
-        'SOL insuficiente para a taxa: precisa de ${fmtUnits(fee + rent, 9, minPlaces: 4)} SOL'
-        '${rent > BigInt.zero ? ' (taxa e conta do destinatário)' : ''} e você tem ${fmtUnits(sol, 9, minPlaces: 4)}. Mande um pouco de SOL para o seu endereço Solana',
+        tr('st.lowSol', {'need': fmtUnits(fee + rent, 9, minPlaces: 4), 'rent': rent > BigInt.zero ? tr('st.rentNote') : '', 'have': fmtUnits(sol, 9, minPlaces: 4)}),
       );
     }
     final left = sol - fee - rent;
     final minAccount = BigInt.from(await _sol('getMinimumBalanceForRentExemption', [0]) as int);
     if (left > BigInt.zero && left < minAccount) {
-      throw SendError('O seu SOL restante ficaria abaixo do mínimo que a Solana exige numa conta (${fmtUnits(minAccount, 9, minPlaces: 4)} SOL). Mande mais SOL');
+      throw SendError(tr('st.belowMinSol', {'min': fmtUnits(minAccount, 9, minPlaces: 4)}));
     }
 
     // a dry run of the unsigned transaction: the network says whether it would run
@@ -571,7 +568,7 @@ class StableSender {
       _b64(wireTransaction(message, Uint8List(64))),
       {'encoding': 'base64', 'sigVerify': false, 'replaceRecentBlockhash': true, 'commitment': 'confirmed'},
     ]) as Map)['value'] as Map;
-    if (sim['err'] != null) throw SendError('A Solana recusou a simulação: ${jsonEncode(sim['err'])}. Nada foi enviado');
+    if (sim['err'] != null) throw SendError(tr('st.simRefused', {'e': jsonEncode(sim['err'])}));
 
     return Quote._(
       token: token,
@@ -627,7 +624,7 @@ class StableSender {
       }
       if (seen == null) {
         if (e.ambiguous || [e.message, ...e.messages].any(_solTaken.hasMatch)) return pending; // see the Polygon side
-        throw SendError('A Solana recusou o envio: ${e.message}');
+        throw SendError(tr('st.solRefusedSend', {'e': e.message}));
       }
     } on StateError {
       // no node answered: it may still have been delivered to one of them
@@ -717,8 +714,8 @@ class StableSender {
   /// (confirmed) or this one took its place and the original can never land (not sent): both certain. Null while the nonce is free.
   Future<Outcome?> cancelPolygon(PendingSend r, List<String> words) async {
     final nonce = r.nonce;
-    if (r.net != Net.polygon.name || nonce == null) throw SendError('Só um envio da Polygon pode ser cancelado assim');
-    if (isStale(r)) throw SendError('Esse envio tem mais de 1 hora: confira a transação no Polygonscan, que guarda o histórico completo');
+    if (r.net != Net.polygon.name || nonce == null) throw SendError(tr('st.onlyPolyCancel'));
+    if (isStale(r)) throw SendError(tr('st.tooOldCancel'));
     try {
       final settled = await reconcile(r);
       if (settled != null) return settled; // nothing left to cancel
@@ -729,7 +726,7 @@ class StableSender {
       const gas = 21000; // a plain transfer with no data
       final pol = _hb(await _poly('eth_getBalance', [r.from, 'latest']));
       if (pol < maxFee * BigInt.from(gas)) {
-        throw SendError('POL insuficiente para cancelar: precisa de até ${fmtUnits(maxFee * BigInt.from(gas), 18, minPlaces: 4)} POL e você tem ${fmtUnits(pol, 18, minPlaces: 4)}');
+        throw SendError(tr('st.lowPolCancel', {'need': fmtUnits(maxFee * BigInt.from(gas), 18, minPlaces: 4), 'have': fmtUnits(pol, 18, minPlaces: 4)}));
       }
       final tx = Eip1559Tx(nonce: nonce, maxPriorityFee: tip, maxFee: maxFee, gasLimit: gas, to: evmAddressBytes(r.from), data: Uint8List(0));
       final seed = mnemonicToSeed(words);
@@ -746,7 +743,7 @@ class StableSender {
         await _poly('eth_sendRawTransaction', [signed.rawHex]);
       } on RpcError catch (e) {
         // a nonce refusal means the original (or another) already took it: the check below says which
-        if (!e.ambiguous && ![e.message, ...e.messages].any(_nonceTalk.hasMatch)) throw SendError('A Polygon recusou o cancelamento: ${e.message}');
+        if (!e.ambiguous && ![e.message, ...e.messages].any(_nonceTalk.hasMatch)) throw SendError(tr('st.polyRefusedCancel', {'e': e.message}));
       } on StateError {
         // no node answered: it may still have been delivered, the check below looks
       }
@@ -757,12 +754,12 @@ class StableSender {
         if (!DateTime.now().isBefore(end)) return null;
         await Future<void>.delayed(pollEvery);
       }
-    } on WalletError catch (e) {
-      throw SendError(e.message);
+    } on WalletError {
+      throw SendError(tr('st.internal')); // e.message is a developer text (Portuguese): not shown
     } on RpcError catch (e) {
-      throw SendError('A rede recusou: ${e.message}');
+      throw SendError(tr('st.netRefused', {'e': e.message}));
     } on StateError {
-      throw SendError('Nenhum nó da Polygon respondeu. Tente de novo');
+      throw SendError(tr('st.noNodePoly'));
     }
   }
 
@@ -783,7 +780,7 @@ class StableSender {
   /// the full history (Solscan, Polygonscan). Anything younger has no such way out: the chain settles it, or the cancel does. If the
   /// chain does settle it just now, that outcome is returned instead and nothing is discarded on trust.
   Future<Outcome?> discardStale(PendingSend r) async {
-    if (!isStale(r)) throw SendError('Esse envio é recente: a rede o resolve sozinha ou dá para cancelá-lo');
+    if (!isStale(r)) throw SendError(tr('st.recentSend'));
     final settled = await reconcile(r);
     await _stored(() => store.remove(r.id));
     return settled;

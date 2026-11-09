@@ -1,0 +1,1 @@
+Language choice: Portuguese, English or Spanish (Wallet screen). Bigger PIN keypad. Dropdowns on the Bitcoin and USDT/USDC balances.

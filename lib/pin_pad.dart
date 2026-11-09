@@ -1,9 +1,11 @@
 // The PIN screens. The digits come from an on-screen keypad, not the system keyboard: no autocorrect, no keyboard history, and the
 // length is free (4 to 8) so there is an OK key instead of submitting at a fixed length.
 import 'dart:async';
+import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
 
+import 'i18n.dart';
 import 'pin.dart';
 import 'theme.dart';
 
@@ -85,90 +87,105 @@ class _PinPadState extends State<PinPad> {
     }
   }
 
-  Widget _key(String id, Widget child, VoidCallback onTap, {Color? color}) => Padding(
-    padding: const EdgeInsets.all(6),
-    child: Material(
-      color: color ?? C.elevated,
-      shape: const CircleBorder(),
-      child: InkWell(
-        key: Key('pin-$id'),
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: SizedBox(width: 68, height: 68, child: Center(child: child)),
-      ),
+  /// One round key of [size] dp: the keypad cell hands every key the biggest circle that fits.
+  Widget _key(String id, Widget child, VoidCallback onTap, double size, {Color? color}) => Material(
+    color: color ?? C.elevated,
+    shape: const CircleBorder(),
+    child: InkWell(
+      key: Key('pin-$id'),
+      customBorder: const CircleBorder(),
+      onTap: onTap,
+      child: SizedBox(width: size, height: size, child: Center(child: child)),
     ),
   );
 
-  Widget _digitKey(String d) => _key(d, Text(d, style: const TextStyle(fontFamily: monoFamily, fontSize: 26, fontWeight: FontWeight.w600)), () => _digit(d));
+  Widget _digitKey(String d, double size) =>
+      _key(d, Text(d, style: TextStyle(fontFamily: monoFamily, fontSize: size * .38, fontWeight: FontWeight.w600)), () => _digit(d), size);
 
-  @override
-  Widget build(BuildContext context) {
-    final left = _left;
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(widget.title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-        if (widget.subtitle != null) ...[
-          const SizedBox(height: 8),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: Text(widget.subtitle!, textAlign: TextAlign.center, style: const TextStyle(color: C.textSec, fontSize: 13))),
-        ],
-        const SizedBox(height: 20),
-        Row(
-          key: const Key('pin-dots'),
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var i = 0; i < (_pin.length < pinMinLength ? pinMinLength : _pin.length); i++)
-              Container(
-                width: 14,
-                height: 14,
-                margin: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: BoxDecoration(shape: BoxShape.circle, color: i < _pin.length ? C.primaryLight : Colors.transparent, border: Border.all(color: C.primaryLight, width: 1.5)),
-              ),
-          ],
-        ),
-        SizedBox(
-          height: widget.blocked != null ? 96 : 52,
-          child: Center(
-            child: Text(
-              widget.blocked ?? (left != null ? 'Muitas tentativas. Tente de novo em ${fmtWait(left)}' : (widget.message ?? '')),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: C.warn, fontSize: 13),
-            ),
-          ),
-        ),
-        Opacity(
+  /// 4 rows by 3 columns. Each key is as big as the room under the dots allows, up to [_maxKey] dp (between the old 68 and a
+  /// screen-filling pad: that was too big), with [_keyGap] dp between keys; the block sits in the middle of the free room.
+  Widget _keypad() => LayoutBuilder(
+    builder: (context, box) {
+      final size = (min(box.maxWidth / 3, box.maxHeight / 4) - _keyGap).clamp(44.0, _maxKey);
+      Widget cell(Widget key) => Padding(padding: const EdgeInsets.all(_keyGap / 2), child: key);
+      Widget row(List<Widget> keys) => Row(mainAxisSize: MainAxisSize.min, children: [for (final k in keys) cell(k)]);
+      return Center(
+        child: Opacity(
           opacity: _can ? 1 : .4,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              for (final row in const [
+              for (final r in const [
                 ['1', '2', '3'],
                 ['4', '5', '6'],
                 ['7', '8', '9'],
               ])
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [for (final d in row) _digitKey(d)]),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _key('del', const Icon(Icons.backspace_outlined, color: C.textSec), _del, color: Colors.transparent),
-                  _digitKey('0'),
-                  _key('ok', Icon(Icons.check, color: _pin.length >= pinMinLength ? Colors.black : C.muted), _ok, color: _pin.length >= pinMinLength ? C.primaryLight : C.elevated),
-                ],
-              ),
+                row([for (final d in r) _digitKey(d, size)]),
+              row([
+                _key('del', Icon(Icons.backspace_outlined, color: C.textSec, size: size * .36), _del, size, color: Colors.transparent),
+                _digitKey('0', size),
+                _key('ok', Icon(Icons.check, size: size * .4, color: _pin.length >= pinMinLength ? Colors.black : C.muted), _ok, size, color: _pin.length >= pinMinLength ? C.primaryLight : C.elevated),
+              ]),
             ],
           ),
         ),
-      ],
+      );
+    },
+  );
+
+  static const _keyGap = 12.0;
+  static const _maxKey = 88.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final left = _left;
+    // a small frame (12 dp) on the sides and the top; the keypad takes everything else
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      child: Column(
+        children: [
+          Text(widget.title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+          if (widget.subtitle != null) ...[
+            const SizedBox(height: 8),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text(widget.subtitle!, textAlign: TextAlign.center, style: const TextStyle(color: C.textSec, fontSize: 13))),
+          ],
+          const SizedBox(height: 20),
+          Row(
+            key: const Key('pin-dots'),
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < (_pin.length < pinMinLength ? pinMinLength : _pin.length); i++)
+                Container(
+                  width: 14,
+                  height: 14,
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: i < _pin.length ? C.primaryLight : Colors.transparent, border: Border.all(color: C.primaryLight, width: 1.5)),
+                ),
+            ],
+          ),
+          SizedBox(
+            height: widget.blocked != null ? 96 : 52,
+            child: Center(
+              child: Text(
+                widget.blocked ?? (left != null ? tr('pin.wait', {'time': fmtWait(left)}) : (widget.message ?? '')),
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: C.warn, fontSize: 13),
+              ),
+            ),
+          ),
+          Expanded(child: _keypad()),
+        ],
+      ),
     );
   }
 }
 
 /// Asks for the current PIN. [onVerified] runs once it is right.
 class PinVerifyView extends StatefulWidget {
-  const PinVerifyView({super.key, required this.store, required this.onVerified, this.title = 'Digite o PIN', this.subtitle, this.now, this.onExhausted});
+  const PinVerifyView({super.key, required this.store, required this.onVerified, this.title, this.subtitle, this.now, this.onExhausted});
   final PinStore store;
   final VoidCallback onVerified;
-  final String title;
+  final String? title;
   final String? subtitle;
   final DateTime Function()? now;
 
@@ -183,7 +200,7 @@ class _PinVerifyViewState extends State<PinVerifyView> {
   DateTime? _until;
   bool _dead = false;
 
-  static const _deadText = 'PIN bloqueado: foram $pinMaxFails tentativas erradas. Use "Esqueci o PIN" para apagar a carteira deste aparelho e restaurar com as 12 palavras.';
+  String get _deadText => tr('pin.dead', {'n': pinMaxFails});
 
   void _die() {
     setState(() => _dead = true);
@@ -210,7 +227,7 @@ class _PinVerifyViewState extends State<PinVerifyView> {
         case PinOk():
           widget.onVerified();
         case PinWrong(:final triesLeft):
-          setState(() => _message = triesLeft == 1 ? 'PIN errado. Mais 1 tentativa antes de esperar.' : 'PIN errado. Mais $triesLeft tentativas antes de esperar.');
+          setState(() => _message = triesLeft == 1 ? tr('pin.wrong1') : tr('pin.wrongN', {'n': triesLeft}));
         case PinWait(:final until):
           setState(() {
             _until = until;
@@ -220,21 +237,21 @@ class _PinVerifyViewState extends State<PinVerifyView> {
           _die();
       }
     } catch (_) {
-      if (mounted) setState(() => _message = 'Não consegui ler o PIN guardado neste aparelho.');
+      if (mounted) setState(() => _message = tr('pin.unreadable'));
     }
   }
 
   @override
   Widget build(BuildContext context) =>
-      PinPad(title: widget.title, subtitle: widget.subtitle, message: _message, waitUntil: _until, now: widget.now, blocked: _dead ? _deadText : null, onSubmit: _submit);
+      PinPad(title: widget.title ?? tr('pin.enter'), subtitle: widget.subtitle, message: _message, waitUntil: _until, now: widget.now, blocked: _dead ? _deadText : null, onSubmit: _submit);
 }
 
 /// Sets a new PIN: typed twice. [onDone] runs once it is stored.
 class PinCreateView extends StatefulWidget {
-  const PinCreateView({super.key, required this.store, required this.onDone, this.title = 'Crie um PIN'});
+  const PinCreateView({super.key, required this.store, required this.onDone, this.title});
   final PinStore store;
   final VoidCallback onDone;
-  final String title;
+  final String? title;
   @override
   State<PinCreateView> createState() => _PinCreateViewState();
 }
@@ -254,7 +271,7 @@ class _PinCreateViewState extends State<PinCreateView> {
     if (pin != first) {
       setState(() {
         _first = null;
-        _message = 'Os dois PINs são diferentes. Comece de novo.';
+        _message = tr('pin.mismatch');
       });
       return;
     }
@@ -265,7 +282,7 @@ class _PinCreateViewState extends State<PinCreateView> {
       if (mounted) {
         setState(() {
           _first = null;
-          _message = 'Não consegui guardar o PIN: $e';
+          _message = tr('pin.cannotSave', {'e': e});
         });
       }
     }
@@ -274,8 +291,8 @@ class _PinCreateViewState extends State<PinCreateView> {
   @override
   Widget build(BuildContext context) => PinPad(
     key: ValueKey(_first == null),
-    title: _first == null ? widget.title : 'Repita o PIN',
-    subtitle: _first == null ? 'De $pinMinLength a $pinMaxLength números. Você vai usá-lo para abrir o app, enviar e ver as 12 palavras.' : 'Digite o mesmo PIN de novo para confirmar.',
+    title: _first == null ? (widget.title ?? tr('pin.create')) : tr('pin.repeat'),
+    subtitle: _first == null ? tr('pin.createHint', {'min': pinMinLength, 'max': pinMaxLength}) : tr('pin.repeatHint'),
     message: _message,
     onSubmit: _submit,
   );

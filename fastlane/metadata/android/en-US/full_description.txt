@@ -2,4 +2,4 @@ Self-custodial wallet by IBIRAPAY: on-chain Bitcoin, Lightning (Spark) and stabl
 
 Keys stay on your device, protected by a PIN. The wallet is recovered with 12 words. It asks for no e-mail, ID number or phone.
 
-It talks to the networks through IBIRAPAY relay servers, which hold no keys and no funds. Test version: use small amounts only.
+It talks to the networks through IBIRAPAY relay servers, which hold no keys and no funds. Available in Portuguese, English and Spanish. Test version: use small amounts only.

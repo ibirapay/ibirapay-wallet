@@ -5,7 +5,9 @@ import 'package:breez_sdk_spark_flutter/breez_sdk_spark.dart' as breez;
 import 'package:flutter/material.dart';
 
 import 'app_lock.dart';
+import 'btc_card.dart';
 import 'chain_balances.dart';
+import 'i18n.dart';
 import 'onchain.dart';
 import 'pending_sends.dart';
 import 'pending_sheet.dart';
@@ -13,6 +15,7 @@ import 'secret_store.dart';
 import 'receive_sheet.dart';
 import 'send_sheet.dart';
 import 'stable_send.dart';
+import 'stable_card.dart';
 import 'stable_send_sheet.dart';
 import 'stable_sheet.dart';
 import 'theme.dart';
@@ -37,6 +40,7 @@ class _HomePageState extends State<HomePage> {
   List<breez.Payment> _payments = const [];
   List<StableBalance>? _stable;
   List<GasBalance>? _gas;
+  List<breez.DepositInfo>? _deposits;
   List<PendingSend> _pending = const [];
   bool _reconciling = false;
   final _pendingStore = SecretPendingStore(SecretStore());
@@ -50,10 +54,16 @@ class _HomePageState extends State<HomePage> {
   /// "carregando..." and fills in by itself when the balances arrive.
   final _lines = ValueNotifier<List<String>>(const []);
 
+  // the lines are texts made at refresh time: a language change rewrites them now, not at the next refresh
+  void _relines() {
+    if (mounted) _lines.value = _balanceLines();
+  }
+
   @override
   void initState() {
     super.initState();
     _lines.value = _balanceLines();
+    lang.addListener(_relines);
     _reconcilePending();
     _refresh();
     _timer = Timer.periodic(const Duration(seconds: 20), (_) => _refresh(quiet: true));
@@ -62,6 +72,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _timer?.cancel();
+    lang.removeListener(_relines);
     _lines.dispose();
     super.dispose();
   }
@@ -72,6 +83,13 @@ class _HomePageState extends State<HomePage> {
       await widget.sdk.syncWallet(request: const breez.SyncWalletRequest());
       final info = await widget.sdk.getInfo(request: const breez.GetInfoRequest(ensureSynced: false));
       final list = await widget.sdk.listPayments(request: const breez.ListPaymentsRequest(limit: 30));
+      // on-chain deposits still waiting for their confirmations: a failed read leaves null ('?'), it never hides the balance
+      List<breez.DepositInfo>? deposits;
+      try {
+        deposits = await OnchainApi.fromSdk(widget.sdk).deposits();
+      } catch (_) {
+        deposits = null;
+      }
       _reconcilePending();
       final (stable, gas) = await (
         readStableBalances(polygon: widget.wallet.polygon, solana: widget.wallet.solana),
@@ -83,6 +101,7 @@ class _HomePageState extends State<HomePage> {
         _payments = list.payments;
         _stable = stable;
         _gas = gas;
+        _deposits = deposits;
         _error = null;
         _syncing = false;
         _lines.value = _balanceLines();
@@ -118,7 +137,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _openPending(PendingSend r) async {
-    final told = await showAppSheet<String>(context, (_) => PendingSheet(record: r, sender: _sender, words: widget.words, confirmPin: () => _confirmPin('Confirme o PIN para cancelar o envio')));
+    final told = await showAppSheet<String>(context, (_) => PendingSheet(record: r, sender: _sender, words: widget.words, confirmPin: () => _confirmPin(tr('home.confirmCancel'))));
     if (told != null && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(told)));
     await _reconcilePending();
   }
@@ -129,11 +148,11 @@ class _HomePageState extends State<HomePage> {
   /// What is on this wallet now, for the delete confirmation: sats, USDT/USDC, and the POL/SOL kept for gas.
   List<String> _balanceLines() {
     final out = <String>[];
-    out.add(_sats == null ? 'sats: carregando...' : (_sats! > 0 ? '${fmtSats(_sats!)} sats' : ''));
+    out.add(_sats == null ? tr('bal.loading', {'sym': 'sats'}) : (_sats! > 0 ? '${fmtSats(_sats!)} sats' : ''));
     for (final sym in const ['USDT', 'USDC']) {
       final rows = _stable?.where((b) => b.symbol == sym || (sym == 'USDC' && b.symbol == 'USDC.e'));
       if (rows == null) {
-        out.add('$sym: carregando...');
+        out.add(tr('bal.loading', {'sym': sym}));
         continue;
       }
       var sum = BigInt.zero;
@@ -146,11 +165,11 @@ class _HomePageState extends State<HomePage> {
           sum += v;
         }
       }
-      out.add(unknown ? '$sym: não consegui ler' : (sum > BigInt.zero ? '$sym ${fmtUnits(sum, stableDecimals6)}' : ''));
+      out.add(unknown ? tr('bal.unreadable', {'sym': sym}) : (sum > BigInt.zero ? '$sym ${fmtUnits(sum, stableDecimals6)}' : ''));
     }
     for (final g in _gas ?? const <GasBalance>[]) {
       final v = g.raw;
-      out.add(v == null ? '${g.symbol}: não consegui ler' : (v > BigInt.zero ? '${g.symbol} ${g.text}' : ''));
+      out.add(v == null ? tr('bal.unreadable', {'sym': g.symbol}) : (v > BigInt.zero ? '${g.symbol} ${g.text}' : ''));
     }
     return out.where((l) => l.isNotEmpty).toList();
   }
@@ -167,7 +186,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _openSendSheet({String? initial}) =>
-      showSendSheet(context, sdk: widget.sdk, pending: _onchainPending, initial: initial, confirmPin: () => _confirmPin('Confirme o PIN para enviar'));
+      showSendSheet(context, sdk: widget.sdk, pending: _onchainPending, initial: initial, confirmPin: () => _confirmPin(tr('home.confirmSend')));
 
   /// The sheet cannot be swiped away: a send walked away from mid-way would hide its outcome and invite a second payment.
   Future<void> _sendStable(Net net, {String? address}) async {
@@ -183,7 +202,7 @@ class _HomePageState extends State<HomePage> {
         balances: _stable,
         initialAddress: address,
         sender: _sender,
-        confirmPin: () => _confirmPin('Confirme o PIN para enviar'),
+        confirmPin: () => _confirmPin(tr('home.confirmSend')),
       ),
       dismissible: false,
     );
@@ -249,14 +268,14 @@ class _HomePageState extends State<HomePage> {
                     child: const Icon(Icons.arrow_downward, size: 44, color: C.success),
                   ),
                   const SizedBox(height: 24),
-                  const Text('Pagamento recebido', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
+                  Text(tr('home.received'), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 12),
                   Text(
                     '+${fmtSats(sats)} sats',
                     style: const TextStyle(fontFamily: monoFamily, fontSize: 48, fontWeight: FontWeight.w700, color: C.primaryLight),
                   ),
                   const SizedBox(height: 28),
-                  const Text('Toque para fechar', style: TextStyle(color: C.muted, fontSize: 13)),
+                  Text(tr('home.tapClose'), style: const TextStyle(color: C.muted, fontSize: 13)),
                 ],
               ),
             ),
@@ -298,8 +317,8 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
               ),
-              _Balance(sats: _sats, syncing: _syncing),
-              _StableCard(balances: _stable),
+              BtcBalance(sats: _sats, syncing: _syncing, deposits: _deposits),
+              StableCard(balances: _stable),
               _GasCard(balances: _gas),
               for (final r in _pending) _PendingNotice(r, onTap: () => _openPending(r)),
               if (_error != null)
@@ -320,14 +339,14 @@ class _HomePageState extends State<HomePage> {
                             Center(
                               child: Column(
                                 children: [
-                                  Text(_syncing ? 'Sincronizando...' : 'Nenhum pagamento ainda', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                                  Text(_syncing ? tr('home.syncing') : tr('home.empty'), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                                   const SizedBox(height: 8),
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 40),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 40),
                                     child: Text(
-                                      'Seu histórico aparece aqui depois do primeiro pagamento enviado ou recebido.',
+                                      tr('home.emptyHint'),
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(color: C.muted, fontSize: 14),
+                                      style: const TextStyle(color: C.muted, fontSize: 14),
                                     ),
                                   ),
                                 ],
@@ -351,55 +370,13 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-class _Balance extends StatelessWidget {
-  const _Balance({required this.sats, required this.syncing});
-  final int? sats;
-  final bool syncing;
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (syncing) ...[
-            Container(width: 6, height: 6, decoration: const BoxDecoration(color: C.primaryLight, shape: BoxShape.circle)),
-            const SizedBox(width: 8),
-          ],
-          Text(syncing ? 'SINCRONIZANDO' : 'SALDO', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, letterSpacing: 2.4, color: C.muted)),
-        ],
-      ),
-      const SizedBox(height: 8),
-      Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
-        children: [
-          Text('₿ ', style: TextStyle(fontSize: 30, color: C.textSec.withValues(alpha: .7), fontFamily: monoFamily)),
-          Text(
-            sats == null ? '...' : fmtSats(sats!),
-            style: TextStyle(
-              fontFamily: monoFamily,
-              fontSize: 44,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -.9,
-              shadows: [Shadow(color: C.primary.withValues(alpha: .5), blurRadius: 40)],
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 4),
-      const Text('sats', style: TextStyle(color: C.textSec, fontSize: 14, fontFamily: monoFamily)),
-    ],
-  );
-}
-
 String _ago(int ts) {
   final s = DateTime.now().millisecondsSinceEpoch ~/ 1000 - ts;
-  if (s < 60) return 'agora';
-  if (s < 3600) return '${s ~/ 60} min';
-  if (s < 86400) return '${s ~/ 3600} h';
-  if (s < 86400 * 30) return '${s ~/ 86400} d';
-  return '${s ~/ (86400 * 30)} mes';
+  if (s < 60) return tr('time.now');
+  if (s < 3600) return tr('time.min', {'n': s ~/ 60});
+  if (s < 86400) return tr('time.h', {'n': s ~/ 3600});
+  if (s < 86400 * 30) return tr('time.d', {'n': s ~/ 86400});
+  return tr('time.mo', {'n': s ~/ (86400 * 30)});
 }
 
 class _PaymentRow extends StatelessWidget {
@@ -428,7 +405,7 @@ class _PaymentRow extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text(recv ? 'Recebido' : 'Enviado', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                    Text(recv ? tr('tx.in') : tr('tx.out'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                     const SizedBox(width: 4),
                     Icon(p.method == breez.PaymentMethod.deposit || p.method == breez.PaymentMethod.withdraw ? Icons.link : Icons.bolt, size: 14, color: C.muted),
                     if (pending) ...[
@@ -441,9 +418,9 @@ class _PaymentRow extends StatelessWidget {
                 Text(
                   [
                     _ago(p.timestamp.toInt()),
-                    if (!recv && p.fees > BigInt.zero) 'taxa ${p.fees}',
-                    if (pending) 'PROCESSANDO',
-                    if (failed) 'FALHOU',
+                    if (!recv && p.fees > BigInt.zero) tr('tx.fee', {'fee': p.fees}),
+                    if (pending) tr('tx.processing'),
+                    if (failed) tr('tx.failed'),
                   ].join(' · '),
                   style: const TextStyle(fontSize: 12, color: C.muted),
                 ),
@@ -481,7 +458,7 @@ class _BottomBar extends StatelessWidget {
     child: Row(
       children: [
         Expanded(
-          child: GradientButton(label: 'Enviar', icon: Icons.arrow_upward, colors: const [C.electric, Color(0xFF0099CC)], onPressed: onSend),
+          child: GradientButton(label: tr('btn.send'), icon: Icons.arrow_upward, colors: const [C.electric, Color(0xFF0099CC)], onPressed: onSend),
         ),
         const SizedBox(width: 10),
         Material(
@@ -499,55 +476,11 @@ class _BottomBar extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: GradientButton(label: 'Receber', icon: Icons.arrow_downward, colors: const [C.success, Color(0xFF059669)], onPressed: onReceive),
+          child: GradientButton(label: tr('btn.receive'), icon: Icons.arrow_downward, colors: const [C.success, Color(0xFF059669)], onPressed: onReceive),
         ),
       ],
     ),
   );
-}
-
-/// USDT and USDC under the sats balance, summed over Polygon and Solana; '?' when no node answered.
-class _StableCard extends StatelessWidget {
-  const _StableCard({required this.balances});
-  final List<StableBalance>? balances;
-
-  BigInt? _sum(String symbol) {
-    final rows = balances?.where((b) => b.symbol == symbol || (symbol == 'USDC' && b.symbol == 'USDC.e'));
-    if (rows == null) return null;
-    var sum = BigInt.zero;
-    for (final r in rows) {
-      if (r.raw == null) return null;
-      sum += r.raw!;
-    }
-    return sum;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    Widget cell(String symbol) {
-      final v = _sum(symbol);
-      return Expanded(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset('assets/icons/${symbol.toLowerCase()}.png', width: 22, height: 22),
-            const SizedBox(width: 8),
-            Text(symbol, style: const TextStyle(fontSize: 13, color: C.textSec)),
-            const SizedBox(width: 8),
-            Text(v == null ? '...' : StableBalance('', symbol, v).text, style: const TextStyle(fontFamily: monoFamily, fontSize: 16, fontWeight: FontWeight.w600)),
-          ],
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Panel(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        child: Row(children: [cell('USDT'), Container(width: 1, height: 24, color: C.border), cell('USDC')]),
-      ),
-    );
-  }
 }
 
 /// POL and SOL under the stablecoins: the gas the user pays for a USDT/USDC send on each network.
@@ -565,7 +498,7 @@ class _GasCard extends StatelessWidget {
           children: [
             Image.asset('assets/icons/$icon.png', width: 18, height: 18),
             const SizedBox(width: 6),
-            Text('$symbol gás', style: const TextStyle(fontSize: 12, color: C.muted)),
+            Text(tr('gas.label', {'symbol': symbol}), style: const TextStyle(fontSize: 12, color: C.muted)),
             const SizedBox(width: 6),
             Text(b == null ? '...' : b.text, style: const TextStyle(fontFamily: monoFamily, fontSize: 13, fontWeight: FontWeight.w600, color: C.textSec)),
           ],
@@ -602,7 +535,7 @@ class _PendingNotice extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Envio em aberto: ${pendingAmount(record)} na ${pendingNetName(record)}. Toque para ver',
+                tr('home.openSend', {'amount': pendingAmount(record), 'net': pendingNetName(record)}),
                 style: const TextStyle(color: C.warn, fontSize: 13),
               ),
             ),

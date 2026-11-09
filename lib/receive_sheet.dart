@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import 'i18n.dart';
 import 'limits.dart';
 import 'onchain.dart';
 import 'theme.dart';
@@ -68,7 +69,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
       });
       _poll = Timer.periodic(const Duration(seconds: 3), (_) => _check());
     } catch (e) {
-      setState(() => _error = 'Erro ao criar a fatura: $e');
+      setState(() => _error = tr('recv.invoiceErr', {'e': e}));
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -101,7 +102,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
     if (inv == null && _onchain) {
       return Column(
         children: [
-          const SheetTitle('Receber', Icons.arrow_downward),
+          SheetTitle(tr('recv.title'), Icons.arrow_downward),
           const SizedBox(height: 12),
           _modeSwitch(),
           const SizedBox(height: 16),
@@ -112,7 +113,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
     if (inv == null) {
       return Column(
         children: [
-          const SheetTitle('Receber', Icons.arrow_downward),
+          SheetTitle(tr('recv.title'), Icons.arrow_downward),
           const SizedBox(height: 12),
           _modeSwitch(),
           const SizedBox(height: 16),
@@ -121,7 +122,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
             autofocus: true,
             keyboardType: TextInputType.number,
             style: const TextStyle(fontFamily: monoFamily, fontSize: 24, fontWeight: FontWeight.w600),
-            decoration: const InputDecoration(hintText: 'Valor', suffixText: 'sats'),
+            decoration: InputDecoration(hintText: tr('recv.amount'), suffixText: 'sats'),
           ),
           const SizedBox(height: 10),
           Row(
@@ -144,14 +145,14 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
                 ),
             ],
           ),
-          const Padding(
-            padding: EdgeInsets.only(top: 12),
-            child: Text('Pagamentos abaixo de $minPaymentSats sats não são aceitos pela rede.', style: TextStyle(color: C.muted, fontSize: 12)),
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(tr('recv.minimum', {'n': minPaymentSats}), style: const TextStyle(color: C.muted, fontSize: 12)),
           ),
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: const TextStyle(color: C.warn, fontSize: 13))),
           const SizedBox(height: 16),
           GradientButton(
-            label: _working ? 'Criando...' : 'Criar fatura',
+            label: _working ? tr('recv.creating') : tr('recv.create'),
             colors: const [C.success, Color(0xFF059669)],
             onPressed: _working ? null : _create,
           ),
@@ -160,7 +161,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
     }
     return Column(
       children: [
-        const SheetTitle('Escaneie para pagar', Icons.arrow_downward),
+        SheetTitle(tr('recv.scan'), Icons.arrow_downward),
         const SizedBox(height: 8),
         Text('${fmtSats(_sats)} sats', style: const TextStyle(fontFamily: monoFamily, fontSize: 30, fontWeight: FontWeight.w700)),
         const SizedBox(height: 16),
@@ -179,7 +180,7 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
           children: [
             Expanded(
               child: GradientButton(
-                label: _copied ? 'Copiado!' : 'Copiar',
+                label: _copied ? tr('recv.copied') : tr('recv.copy'),
                 icon: Icons.copy,
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: inv));
@@ -190,12 +191,12 @@ class _ReceiveSheetState extends State<ReceiveSheet> {
           ],
         ),
         const SizedBox(height: 14),
-        const Row(
+        Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: C.primaryLight)),
-            SizedBox(width: 8),
-            Text('Aguardando o pagamento...', style: TextStyle(color: C.muted, fontSize: 13)),
+            const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: C.primaryLight)),
+            const SizedBox(width: 8),
+            Text(tr('recv.waiting'), style: const TextStyle(color: C.muted, fontSize: 13)),
           ],
         ),
       ],

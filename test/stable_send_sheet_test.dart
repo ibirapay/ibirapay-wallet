@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wallet/i18n.dart';
 import 'package:wallet/chain_balances.dart';
 import 'package:wallet/pending_sends.dart';
 import 'package:wallet/stable_send.dart';
@@ -64,6 +65,22 @@ Future<void> _fill(WidgetTester t, {required String to, required String amount})
 }
 
 void main() {
+  for (final l in Lang.values) {
+    testWidgets('the send form fits a narrow phone in ${l.label}', (t) async {
+      addTearDown(() => lang.value = Lang.pt);
+      lang.value = l;
+      t.view.physicalSize = const Size(360, 800);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      await t.pumpWidget(_app(_Node()));
+      expect(t.takeException(), isNull);
+      expect(find.text(tr('sts.title')), findsOneWidget);
+      expect(find.text(tr('ss.network', {'net': 'Polygon'})), findsOneWidget);
+      expect(find.text(tr('sts.all')), findsOneWidget);
+      expect(find.text(tr('sts.gasNote', {'gas': 'POL', 'net': 'Polygon'})), findsOneWidget);
+    });
+  }
+
   testWidgets('form: the network is named, the balance is shown, USDC.e is hidden when not held', (t) async {
     await t.pumpWidget(_app(_Node()));
     expect(find.text('Rede Polygon'), findsOneWidget);

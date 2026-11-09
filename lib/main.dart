@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'app_lock.dart';
 import 'delete_wallet_view.dart';
 import 'home_page.dart';
+import 'i18n.dart';
 import 'pending_sends.dart';
 import 'pin.dart';
 import 'pin_pad.dart';
@@ -44,6 +45,7 @@ Widget homeWithSpark(BuildContext context, OpenedWallet w, WalletOps ops, AppLoc
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  lang.value = await LangPrefs().load(); // the saved language, or the phone's, before the first frame
   final store = SecretStore();
   final lock = AppLock(pins: PinStore(store))..attach();
   await lock.refresh(lockIfSet: true); // with a PIN, the lock is up before the first frame
@@ -183,7 +185,7 @@ class _GateState extends State<Gate> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Não foi possível conectar: $e';
+          _error = tr('main.connectFail', {'e': e});
           _loading = false;
           _words = words;
         });
@@ -208,7 +210,7 @@ class _GateState extends State<Gate> {
   Future<void> _restoreFromWords() async {
     final words = _restore.text.trim().toLowerCase().split(RegExp(r'\s+'));
     if (!validMnemonic(words)) {
-      setState(() => _error = 'As palavras não formam uma carteira válida (12 palavras em inglês).');
+      setState(() => _error = tr('main.badWords'));
       return;
     }
     await widget.store.write(walletWordsKey, words.join(' '));
@@ -227,7 +229,8 @@ class _GateState extends State<Gate> {
       body: Backdrop(
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            // the PIN keypad takes the whole screen inside a small frame; the other steps keep their margin
+            padding: EdgeInsets.all(_needPin && !_loading ? 0 : 24),
             child: _loading
                 ? Center(
                     child: Column(
@@ -240,7 +243,7 @@ class _GateState extends State<Gate> {
                     ),
                   )
                 : _needPin
-                ? PinCreateView(store: widget.lock.pins, title: 'Crie um PIN para proteger a carteira', onDone: _pinSet)
+                ? PinCreateView(store: widget.lock.pins, title: tr('pin.createWallet'), onDone: _pinSet)
                 : _words != null && _error != null
                 ? _retry()
                 : _restoring
@@ -259,14 +262,14 @@ class _GateState extends State<Gate> {
       Center(child: ClipRRect(borderRadius: BorderRadius.circular(28), child: Image.asset('assets/logo.png', width: 128, height: 128))),
       const SizedBox(height: 24),
       const Text('IBIRAPAY', textAlign: TextAlign.center, style: TextStyle(fontSize: 40, fontWeight: FontWeight.w800, letterSpacing: -1)),
-      const Text('Carteira', textAlign: TextAlign.center, style: TextStyle(fontSize: 22, color: C.primaryLight, letterSpacing: 6)),
+      Text(tr('info.title'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, color: C.primaryLight, letterSpacing: 6)),
       const SizedBox(height: 16),
-      const Text('Bitcoin pela Lightning, USDT e USDC.\nVocê guarda as chaves.', textAlign: TextAlign.center, style: TextStyle(color: C.textSec, fontSize: 14)),
+      Text(tr('main.tagline'), textAlign: TextAlign.center, style: const TextStyle(color: C.textSec, fontSize: 14)),
       const Spacer(),
       if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, style: const TextStyle(color: C.warn, fontSize: 13))),
-      GradientButton(label: 'Criar carteira', onPressed: _create),
+      GradientButton(label: tr('main.create'), onPressed: _create),
       const SizedBox(height: 12),
-      OutlineButton(label: 'Restaurar com 12 palavras', onPressed: () => setState(() => _restoring = true)),
+      OutlineButton(label: tr('main.restoreWith'), onPressed: () => setState(() => _restoring = true)),
       const SizedBox(height: 16),
       Text(_versionLine, textAlign: TextAlign.center, style: const TextStyle(color: C.muted, fontSize: 11, fontFamily: monoFamily)),
     ],
@@ -277,7 +280,7 @@ class _GateState extends State<Gate> {
     children: [
       Row(children: [IconButton(onPressed: () => setState(() => _restoring = false), icon: const Icon(Icons.arrow_back))]),
       const SizedBox(height: 8),
-      const Text('Restaurar carteira', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+      Text(tr('main.restoreTitle'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
       const SizedBox(height: 16),
       TextField(
         controller: _restore,
@@ -286,11 +289,11 @@ class _GateState extends State<Gate> {
         autocorrect: false,
         enableSuggestions: false,
         style: const TextStyle(fontFamily: monoFamily, fontSize: 15),
-        decoration: const InputDecoration(hintText: 'as 12 palavras, separadas por espaço'),
+        decoration: InputDecoration(hintText: tr('main.restoreHint')),
       ),
       if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: const TextStyle(color: C.warn, fontSize: 13))),
       const SizedBox(height: 16),
-      GradientButton(label: 'Restaurar', onPressed: _restoreFromWords),
+      GradientButton(label: tr('main.restore'), onPressed: _restoreFromWords),
     ],
   );
 
@@ -302,7 +305,7 @@ class _GateState extends State<Gate> {
       const SizedBox(height: 16),
       Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: C.textSec, fontSize: 13)),
       const SizedBox(height: 20),
-      GradientButton(label: 'Tentar de novo', onPressed: () => _open(_words!)),
+      GradientButton(label: tr('main.retry'), onPressed: () => _open(_words!)),
     ],
   );
 }

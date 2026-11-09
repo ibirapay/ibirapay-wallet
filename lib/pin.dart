@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 
 import 'backup_crypto.dart' show Argon2Params;
+import 'i18n.dart';
 import 'secret_store.dart';
 
 /// About 19 MiB and 2 passes: a fraction of a second on a phone, and a guess still costs an attacker who got the hash real memory.
@@ -18,12 +19,12 @@ const pinMaxLength = 8;
 /// Why [pin] cannot be used as a new PIN, or null when it can. Straight runs wrap around (7890, 0123, 3210).
 String? pinProblem(String pin) {
   if (!RegExp(r'^\d+$').hasMatch(pin) || pin.length < pinMinLength || pin.length > pinMaxLength) {
-    return 'O PIN tem de ter de $pinMinLength a $pinMaxLength números';
+    return tr('pin.length', {'min': pinMinLength, 'max': pinMaxLength});
   }
   final d = [for (final c in pin.codeUnits) c - 0x30];
-  if (d.every((x) => x == d.first)) return 'Não use o mesmo número repetido';
+  if (d.every((x) => x == d.first)) return tr('pin.repeated');
   final steps = {for (var i = 1; i < d.length; i++) (d[i] - d[i - 1]) % 10};
-  if (steps.length == 1 && (steps.first == 1 || steps.first == 9)) return 'Não use uma sequência como 1234 ou 4321';
+  if (steps.length == 1 && (steps.first == 1 || steps.first == 9)) return tr('pin.sequence');
   return null;
 }
 

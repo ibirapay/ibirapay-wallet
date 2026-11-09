@@ -3,6 +3,7 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
+import 'i18n.dart';
 import 'pending_sends.dart';
 import 'stable_send.dart' show fmtUnits, isStale;
 import 'theme.dart';
@@ -47,11 +48,11 @@ class _DeleteWalletViewState extends State<DeleteWalletView> {
       final recent = all.any((r) => !isStale(r));
       setState(() {
         if (recent) {
-          _openSend = 'Há um envio de USDT/USDC em aberto. Espere ele terminar, ou cancele-o na tela inicial, antes de apagar a carteira.';
+          _openSend = tr('del.openSend');
         } else if (_lockScreen) {
           _old = all; // shown below, and acknowledged
         } else {
-          _openSend = 'Há envios de USDT/USDC antigos sem resposta. Resolva, cancele ou descarte cada um na tela inicial (depois de conferir no explorador) antes de apagar a carteira.';
+          _openSend = tr('del.oldSends');
         }
       });
     }, onError: (_) {});
@@ -63,7 +64,7 @@ class _DeleteWalletViewState extends State<DeleteWalletView> {
     super.dispose();
   }
 
-  bool get _ready => _wrote && (_old.isEmpty || _acknowledged) && _typed.text.trim().toUpperCase() == 'APAGAR' && !_busy && _openSend == null;
+  bool get _ready => _wrote && (_old.isEmpty || _acknowledged) && _typed.text.trim().toUpperCase() == tr('del.word') && !_busy && _openSend == null;
 
   Future<void> _delete() async {
     if (!_ready) return;
@@ -90,7 +91,7 @@ class _DeleteWalletViewState extends State<DeleteWalletView> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _error = 'Não consegui apagar tudo ($e). A carteira só foi apagada se você voltar à tela de boas-vindas; tente de novo.';
+          _error = tr('del.fail', {'e': e});
         });
       }
     }
@@ -103,12 +104,12 @@ class _DeleteWalletViewState extends State<DeleteWalletView> {
       children: [
         Row(children: [IconButton(onPressed: _busy ? null : widget.onBack, icon: const Icon(Icons.arrow_back))]),
         const SizedBox(height: 4),
-        const Text('Apagar carteira', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+        Text(tr('del.title'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
         const SizedBox(height: 14),
-        const Panel(
+        Panel(
           child: Text(
-            'Isto apaga as chaves desta carteira deste aparelho. Sem as 12 palavras, os sats, o USDT e o USDC dela ficam perdidos para sempre. Com as palavras você restaura a mesma carteira, aqui ou em outro aparelho.',
-            style: TextStyle(color: C.warn, fontSize: 14),
+            tr('del.warn'),
+            style: const TextStyle(color: C.warn, fontSize: 14),
           ),
         ),
         const SizedBox(height: 12),
@@ -116,21 +117,21 @@ class _DeleteWalletViewState extends State<DeleteWalletView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('O que fica sem acesso neste aparelho', style: TextStyle(color: C.textSec, fontSize: 13)),
+              Text(tr('del.loses'), style: const TextStyle(color: C.textSec, fontSize: 13)),
               const SizedBox(height: 6),
               if (widget.balances == null)
-                const Text('O app está bloqueado e não mostra o saldo.', style: TextStyle(fontSize: 14))
+                Text(tr('del.locked'), style: const TextStyle(fontSize: 14))
               else
                 ValueListenableBuilder<List<String>>(
                   valueListenable: widget.balances!,
                   builder: (context, lines, _) => lines.isEmpty
-                      ? const Text('Nenhum saldo.', style: TextStyle(fontSize: 14))
+                      ? Text(tr('del.noBalance'), style: const TextStyle(fontSize: 14))
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             for (final l in lines) Text(l, style: const TextStyle(fontFamily: monoFamily, fontSize: 15, fontWeight: FontWeight.w600)),
-                            if (lines.any((l) => l.endsWith('carregando...')))
-                              const Padding(padding: EdgeInsets.only(top: 6), child: Text('O saldo ainda está carregando e aparece aqui sozinho.', style: TextStyle(color: C.muted, fontSize: 12))),
+                            if (lines.any(isLoadingLine))
+                              Padding(padding: const EdgeInsets.only(top: 6), child: Text(tr('del.loadingNote'), style: const TextStyle(color: C.muted, fontSize: 12))),
                           ],
                         ),
                 ),
@@ -143,14 +144,14 @@ class _DeleteWalletViewState extends State<DeleteWalletView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Envios de USDT/USDC sem resposta, que podem ainda ser executados:', style: TextStyle(color: C.warn, fontSize: 13)),
+                Text(tr('del.unanswered'), style: const TextStyle(color: C.warn, fontSize: 13)),
                 const SizedBox(height: 8),
                 for (final r in _old) ...[
                   Text('${r.net == 'polygon' ? 'Polygon' : 'Solana'}: ${fmtUnits(BigInt.parse(r.amount), 6)} ${r.symbol}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   SelectableText(r.id, style: const TextStyle(fontFamily: monoFamily, fontSize: 11, color: C.primaryLight)),
                   const SizedBox(height: 6),
                 ],
-                const Text('Anote os códigos acima: depois de restaurar, o app não vai lembrar deles.', style: TextStyle(color: C.textSec, fontSize: 12)),
+                Text(tr('del.noteCodes'), style: const TextStyle(color: C.textSec, fontSize: 12)),
               ],
             ),
           ),
@@ -160,7 +161,7 @@ class _DeleteWalletViewState extends State<DeleteWalletView> {
             controlAffinity: ListTileControlAffinity.leading,
             contentPadding: EdgeInsets.zero,
             activeColor: C.primaryLight,
-            title: const Text('Vou conferir esses envios no explorador antes de enviar de novo depois de restaurar', style: TextStyle(fontSize: 14)),
+            title: Text(tr('del.checkSends'), style: const TextStyle(fontSize: 14)),
           ),
         ],
         const SizedBox(height: 12),
@@ -170,7 +171,7 @@ class _DeleteWalletViewState extends State<DeleteWalletView> {
           controlAffinity: ListTileControlAffinity.leading,
           contentPadding: EdgeInsets.zero,
           activeColor: C.primaryLight,
-          title: const Text('Anotei as 12 palavras em papel e conferi', style: TextStyle(fontSize: 14)),
+          title: Text(tr('del.wrote'), style: const TextStyle(fontSize: 14)),
         ),
         TextField(
           controller: _typed,
@@ -178,13 +179,13 @@ class _DeleteWalletViewState extends State<DeleteWalletView> {
           autocorrect: false,
           enableSuggestions: false,
           textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(hintText: 'Digite APAGAR para confirmar'),
+          decoration: InputDecoration(hintText: tr('del.hint', {'word': tr('del.word')})),
         ),
         if (_openSend != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_openSend!, style: const TextStyle(color: C.warn, fontSize: 13))),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: const TextStyle(color: C.warn, fontSize: 13))),
         const SizedBox(height: 16),
         GradientButton(
-          label: _busy ? 'Apagando...' : 'Apagar carteira',
+          label: _busy ? tr('del.busy') : tr('del.title'),
           colors: const [C.warn, Color(0xFFB45309)],
           onPressed: _ready ? _delete : null,
         ),

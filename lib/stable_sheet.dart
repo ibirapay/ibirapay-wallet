@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import 'i18n.dart';
 import 'theme.dart';
 
 // Bitcoin's own brand orange, for its icon only (not a design default, see theme.dart).
@@ -18,14 +19,14 @@ class StableReceive extends StatelessWidget {
     final poly = network == 'Polygon';
     return Column(
       children: [
-        SheetTitle('Receber USDT ou USDC', Icons.arrow_downward),
+        SheetTitle(tr('ss.receiveTitle'), Icons.arrow_downward),
         const SizedBox(height: 14),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Image.asset('assets/icons/${poly ? 'polygon' : 'solana'}.png', width: 22, height: 22),
             const SizedBox(width: 8),
-            Text('Rede $network', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            Text(tr('ss.network', {'net': network}), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
           ],
         ),
         const SizedBox(height: 14),
@@ -38,19 +39,19 @@ class StableReceive extends StatelessWidget {
         SelectableText(address, textAlign: TextAlign.center, style: const TextStyle(fontFamily: monoFamily, fontSize: 12, color: C.primaryLight)),
         const SizedBox(height: 14),
         GradientButton(
-          label: 'Copiar endereço',
+          label: tr('ss.copyAddress'),
           icon: Icons.copy,
           onPressed: () {
             Clipboard.setData(ClipboardData(text: address));
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Endereço copiado')));
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('ss.addressCopied'))));
           },
         ),
         const SizedBox(height: 14),
         Panel(
           child: Text(
             poly
-                ? 'Envie somente USDT ou USDC pela rede Polygon. Tokens enviados por outra rede ficam perdidos. O mesmo endereço recebe os dois.'
-                : 'Envie somente USDT ou USDC pela rede Solana. Tokens enviados por outra rede ficam perdidos. O mesmo endereço recebe os dois.',
+                ? tr('ss.onlyOn', {'net': 'Polygon'})
+                : tr('ss.onlyOn', {'net': 'Solana'}),
             style: const TextStyle(color: C.warn, fontSize: 13),
           ),
         ),
@@ -105,11 +106,11 @@ class ReceiveChooser extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      const SheetTitle('Receber', Icons.arrow_downward),
+      SheetTitle(tr('recv.title'), Icons.arrow_downward),
       const SizedBox(height: 18),
-      _NetTile(const Icon(Icons.currency_bitcoin, color: _btcOrange, size: 30), 'Bitcoin', 'Fatura Lightning (cai na hora) ou endereço on-chain', () => Navigator.pop(context, 'ln')),
-      _NetTile(Image.asset('assets/icons/polygon.png', width: 30, height: 30), 'USDT ou USDC na Polygon', 'Endereço para receber dólar digital', () => Navigator.pop(context, 'Polygon')),
-      _NetTile(Image.asset('assets/icons/solana.png', width: 30, height: 30), 'USDT ou USDC na Solana', 'Endereço para receber dólar digital', () => Navigator.pop(context, 'Solana')),
+      _NetTile(const Icon(Icons.currency_bitcoin, color: _btcOrange, size: 30), 'Bitcoin', tr('ss.btcReceive'), () => Navigator.pop(context, 'ln')),
+      _NetTile(Image.asset('assets/icons/polygon.png', width: 30, height: 30), tr('ss.stableOn', {'net': 'Polygon'}), tr('ss.dollarAddress'), () => Navigator.pop(context, 'Polygon')),
+      _NetTile(Image.asset('assets/icons/solana.png', width: 30, height: 30), tr('ss.stableOn', {'net': 'Solana'}), tr('ss.dollarAddress'), () => Navigator.pop(context, 'Solana')),
     ],
   );
 }
@@ -120,11 +121,11 @@ class SendChooser extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      const SheetTitle('Enviar', Icons.arrow_upward),
+      SheetTitle(tr('btn.send'), Icons.arrow_upward),
       const SizedBox(height: 18),
-      _NetTile(const Icon(Icons.currency_bitcoin, color: _btcOrange, size: 30), 'Bitcoin', 'Fatura ou voucher Lightning, ou endereço on-chain', () => Navigator.pop(context, 'ln')),
-      _NetTile(Image.asset('assets/icons/polygon.png', width: 30, height: 30), 'USDT ou USDC na Polygon', 'Você paga o gás em POL', () => Navigator.pop(context, 'Polygon')),
-      _NetTile(Image.asset('assets/icons/solana.png', width: 30, height: 30), 'USDT ou USDC na Solana', 'Você paga a taxa em SOL', () => Navigator.pop(context, 'Solana')),
+      _NetTile(const Icon(Icons.currency_bitcoin, color: _btcOrange, size: 30), 'Bitcoin', tr('ss.btcSend'), () => Navigator.pop(context, 'ln')),
+      _NetTile(Image.asset('assets/icons/polygon.png', width: 30, height: 30), tr('ss.stableOn', {'net': 'Polygon'}), tr('ss.gasPol'), () => Navigator.pop(context, 'Polygon')),
+      _NetTile(Image.asset('assets/icons/solana.png', width: 30, height: 30), tr('ss.stableOn', {'net': 'Solana'}), tr('ss.feeSol'), () => Navigator.pop(context, 'Solana')),
     ],
   );
 }

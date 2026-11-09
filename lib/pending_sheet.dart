@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'i18n.dart';
 import 'pending_sends.dart';
 import 'stable_send.dart';
 import 'theme.dart';
@@ -15,18 +16,18 @@ String pendingAmount(PendingSend r) => '${fmtUnits(BigInt.parse(r.amount), stabl
 
 /// What the user is told when [o] settles an open send.
 String settledText(PendingSend r, Outcome o) => switch (o.result) {
-  Result.confirmed => 'Envio de ${pendingAmount(r)}: confirmado',
-  Result.reverted => 'Envio de ${pendingAmount(r)}: falhou na rede, os tokens não saíram',
-  Result.notSent => 'Envio de ${pendingAmount(r)}: não chegou a entrar na rede, nada foi cobrado',
-  Result.pending => 'Envio de ${pendingAmount(r)}: ainda sem confirmação',
+  Result.confirmed => tr('pend.confirmed', {'amount': pendingAmount(r)}),
+  Result.reverted => tr('pend.reverted', {'amount': pendingAmount(r)}),
+  Result.notSent => tr('pend.notSent', {'amount': pendingAmount(r)}),
+  Result.pending => tr('pend.pending', {'amount': pendingAmount(r)}),
 };
 
 /// What the user is told when a cancel settles an open send.
 String cancelText(PendingSend r, Outcome o) => switch (o.result) {
-  Result.notSent => 'Envio de ${pendingAmount(r)} cancelado: não entrou na rede. O cancelamento custou um pouco de POL',
-  Result.confirmed => 'Não deu para cancelar: o envio de ${pendingAmount(r)} já tinha entrado e foi confirmado',
-  Result.reverted => 'Não deu para cancelar: o envio de ${pendingAmount(r)} já tinha sido executado e falhou na rede, os tokens não saíram',
-  Result.pending => 'Envio de ${pendingAmount(r)}: ainda sem confirmação',
+  Result.notSent => tr('pend.cancelled', {'amount': pendingAmount(r)}),
+  Result.confirmed => tr('pend.cancelTooLateOk', {'amount': pendingAmount(r)}),
+  Result.reverted => tr('pend.cancelTooLateFail', {'amount': pendingAmount(r)}),
+  Result.pending => tr('pend.pending', {'amount': pendingAmount(r)}),
 };
 
 class PendingSheet extends StatefulWidget {
@@ -63,7 +64,7 @@ class _PendingSheetState extends State<PendingSheet> {
     }
     try {
       final o = await widget.sender.discardStale(_r);
-      if (mounted) Navigator.pop(context, o == null ? 'Envio descartado do registro' : settledText(_r, o));
+      if (mounted) Navigator.pop(context, o == null ? tr('pend.discarded') : settledText(_r, o));
     } on SendError catch (e) {
       if (mounted) {
         setState(() {
@@ -91,7 +92,7 @@ class _PendingSheetState extends State<PendingSheet> {
       return;
     }
     if (!mounted) return;
-    setState(() => _note = 'Cancelando... pode levar até um minuto e meio. Não feche o aplicativo');
+    setState(() => _note = tr('pend.cancelling'));
     try {
       final o = await widget.sender.cancelPolygon(_r, widget.words);
       if (!mounted) return;
@@ -99,7 +100,7 @@ class _PendingSheetState extends State<PendingSheet> {
         setState(() {
           _checking = false;
           _confirmCancel = false;
-          _note = 'Cancelamento enviado, mas a rede ainda não o confirmou. Confira de novo em instantes.';
+          _note = tr('pend.cancelUnconfirmed');
         });
         return;
       }
@@ -126,7 +127,7 @@ class _PendingSheetState extends State<PendingSheet> {
     if (o == null) {
       setState(() {
         _checking = false;
-        _note = 'Ainda não dá para saber. Confira no explorador.';
+        _note = tr('pend.cannotTell');
       });
       return;
     }
@@ -137,10 +138,10 @@ class _PendingSheetState extends State<PendingSheet> {
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      const SheetTitle('Envio em aberto', Icons.hourglass_top),
+      SheetTitle(tr('pend.title'), Icons.hourglass_top),
       const SizedBox(height: 14),
       Text(
-        'Esse envio foi assinado e pode ter entrado na rede, mas ainda não há confirmação. Não envie de novo antes de conferir: pode pagar duas vezes.',
+        tr('pend.body'),
         textAlign: TextAlign.center,
         style: const TextStyle(color: C.warn, fontSize: 13),
       ),
@@ -149,14 +150,14 @@ class _PendingSheetState extends State<PendingSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            RowKV('Valor', pendingAmount(_r)),
-            RowKV('Rede', pendingNetName(_r)),
+            RowKV(tr('common.amount'), pendingAmount(_r)),
+            RowKV(tr('pend.network'), pendingNetName(_r)),
             const Divider(height: 16),
-            const Text('Para', style: TextStyle(color: C.textSec, fontSize: 14)),
+            Text(tr('common.to'), style: const TextStyle(color: C.textSec, fontSize: 14)),
             const SizedBox(height: 4),
             SelectableText(_r.to, style: const TextStyle(fontFamily: monoFamily, fontSize: 12, color: C.primaryLight)),
             const SizedBox(height: 10),
-            const Text('Transação', style: TextStyle(color: C.textSec, fontSize: 14)),
+            Text(tr('pend.transaction'), style: const TextStyle(color: C.textSec, fontSize: 14)),
             const SizedBox(height: 4),
             SelectableText(_r.id, style: const TextStyle(fontFamily: monoFamily, fontSize: 12, color: C.primaryLight)),
           ],
@@ -164,10 +165,10 @@ class _PendingSheetState extends State<PendingSheet> {
       ),
       if (_note != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(_note!, style: const TextStyle(color: C.muted, fontSize: 13))),
       const SizedBox(height: 14),
-      GradientButton(label: _checking ? 'Conferindo...' : 'Conferir agora', onPressed: _checking ? null : _check),
+      GradientButton(label: _checking ? tr('pend.checking') : tr('pend.checkNow'), onPressed: _checking ? null : _check),
       const SizedBox(height: 10),
       OutlineButton(
-        label: _copied ? 'Link copiado' : 'Copiar link do explorador',
+        label: _copied ? tr('sts.linkCopied') : tr('sts.copyLink'),
         icon: Icons.copy,
         onPressed: () async {
           await Clipboard.setData(ClipboardData(text: pendingExplorer(_r)));
@@ -177,39 +178,39 @@ class _PendingSheetState extends State<PendingSheet> {
       const SizedBox(height: 10),
       if (isStale(_r)) ...[
         Text(
-          'Esse envio tem mais de 1 hora e a rede pública já não guarda o histórico dele, então o app não consegue provar que ele não entrou. Antes de descartar, abra o link no $_explorerName (histórico completo): se a transação aparece lá, o envio FOI feito.',
+          tr('pend.staleNote', {'explorer': _explorerName}),
           textAlign: TextAlign.center,
           style: const TextStyle(color: C.muted, fontSize: 12),
         ),
         TextButton(
           onPressed: _checking ? null : _discard,
           child: Text(
-            _confirmDiscard ? 'Toque de novo: conferi no $_explorerName e ele NÃO aparece' : 'Descartar (conferi no $_explorerName)',
+            _confirmDiscard ? tr('pend.discardAgain', {'explorer': _explorerName}) : tr('pend.discardCheck', {'explorer': _explorerName}),
             textAlign: TextAlign.center,
             style: TextStyle(color: _confirmDiscard ? C.warn : C.textSec),
           ),
         ),
       ] else if (_polygon) ...[
-        const Text(
-          'Se ele não aparece no explorador e você quer liberar novos envios, dá para cancelar: o app manda uma transação sua, para você mesmo e sem valor, no lugar dele. Se o envio original já tiver entrado, ele é confirmado normalmente. Custa um pouco de POL.',
+        Text(
+          tr('pend.cancelNote'),
           textAlign: TextAlign.center,
-          style: TextStyle(color: C.muted, fontSize: 12),
+          style: const TextStyle(color: C.muted, fontSize: 12),
         ),
         TextButton(
           onPressed: _checking ? null : _cancel,
           child: Text(
-            _confirmCancel ? 'Toque de novo para cancelar o envio' : 'Cancelar envio',
+            _confirmCancel ? tr('pend.cancelAgain') : tr('pend.cancelSend'),
             textAlign: TextAlign.center,
             style: TextStyle(color: _confirmCancel ? C.warn : C.textSec),
           ),
         ),
       ] else
-        const Text(
-          'A Solana resolve esse envio sozinha: se ele não tiver entrado até o fim da validade (cerca de 1 a 2 minutos), o app o marca como não enviado.',
+        Text(
+          tr('pend.solanaNote'),
           textAlign: TextAlign.center,
-          style: TextStyle(color: C.muted, fontSize: 12),
+          style: const TextStyle(color: C.muted, fontSize: 12),
         ),
-      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Fechar', style: TextStyle(color: C.muted))),
+      TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('common.close'), style: const TextStyle(color: C.muted))),
     ],
   );
 }

@@ -7,24 +7,37 @@ import 'app_lock.dart';
 import 'chain_balances.dart' show rpcRoute;
 import 'spark.dart' show sparkRoute;
 import 'delete_wallet_view.dart';
+import 'i18n.dart';
 import 'theme.dart';
 import 'wallet.dart';
 import 'wipe.dart';
 
 class WalletInfoPage extends StatefulWidget {
-  const WalletInfoPage({super.key, required this.wallet, required this.words, required this.version, required this.lock, required this.ops, required this.balanceLines});
+  const WalletInfoPage({super.key, required this.wallet, required this.words, required this.version, required this.lock, required this.ops, required this.balanceLines, this.langPrefs});
   final DerivedWallet wallet;
   final List<String> words;
   final String version;
   final AppLock lock;
   final WalletOps ops;
   final ValueListenable<List<String>> balanceLines;
+
+  /// Where the language choice is saved (tests give a temp folder).
+  final LangPrefs? langPrefs;
   @override
   State<WalletInfoPage> createState() => _WalletInfoPageState();
 }
 
 class _WalletInfoPageState extends State<WalletInfoPage> {
   bool _show = false;
+
+  Future<void> _pickLang(Lang l) async {
+    setLang(l);
+    try {
+      await (widget.langPrefs ?? LangPrefs()).save(l);
+    } catch (_) {
+      // not saved: the choice holds until the app is closed, and the next start follows the phone again
+    }
+  }
 
   @override
   void initState() {
@@ -51,7 +64,7 @@ class _WalletInfoPageState extends State<WalletInfoPage> {
 
   Future<void> _toggle() async {
     // showing the words asks the PIN; hiding them does not
-    if (!_show && !await widget.lock.confirm(context, reason: 'Confirme o PIN para ver as 12 palavras')) return;
+    if (!_show && !await widget.lock.confirm(context, reason: tr('info.confirmWords'))) return;
     if (!mounted) return;
     if (_show) {
       _hide();
@@ -63,7 +76,7 @@ class _WalletInfoPageState extends State<WalletInfoPage> {
     if (!ok || !mounted) {
       widget.lock.secure.release('words');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Não consegui bloquear capturas de tela, então as palavras não serão mostradas.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('info.noCapture'))));
       }
       return;
     }
@@ -85,7 +98,7 @@ class _WalletInfoPageState extends State<WalletInfoPage> {
                 icon: const Icon(Icons.copy, size: 18, color: C.muted),
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: a));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copiado')));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('info.copied'))));
                 },
               ),
             ],
@@ -98,14 +111,14 @@ class _WalletInfoPageState extends State<WalletInfoPage> {
   void _openDelete() => Navigator.of(context).push(
     MaterialPageRoute(
       builder: (ctx) => Scaffold(
-        appBar: AppBar(title: const Text('Apagar carteira'), backgroundColor: C.surface, automaticallyImplyLeading: false),
+        appBar: AppBar(title: Text(tr('del.title')), backgroundColor: C.surface, automaticallyImplyLeading: false),
         body: Backdrop(
           child: SafeArea(
             child: DeleteWalletView(
               ops: widget.ops,
               balances: widget.balanceLines,
               onBack: () => Navigator.pop(ctx),
-              confirmPin: () => widget.lock.confirm(ctx, reason: 'Confirme o PIN para apagar a carteira'),
+              confirmPin: () => widget.lock.confirm(ctx, reason: tr('info.confirmDelete')),
               onWiped: widget.lock.walletWiped, // the Gate goes back to the welcome screen and clears the pages above it
             ),
           ),
@@ -116,17 +129,29 @@ class _WalletInfoPageState extends State<WalletInfoPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Carteira'), backgroundColor: C.surface),
+    appBar: AppBar(title: Text(tr('info.title')), backgroundColor: C.surface),
     body: Backdrop(
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('Endereços para USDT e USDC', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: .5, color: C.muted)),
+          Text(tr('lang.title'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: .5, color: C.muted)),
+          const SizedBox(height: 10),
+          ValueListenableBuilder<Lang>(
+            valueListenable: lang,
+            builder: (context, current, _) => SegmentedButton<Lang>(
+              segments: [for (final l in Lang.values) ButtonSegment(value: l, label: Text(l.label, key: Key('lang-${l.name}')))],
+              selected: {current},
+              showSelectedIcon: false,
+              onSelectionChanged: (s) => _pickLang(s.first),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(tr('info.addresses'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: .5, color: C.muted)),
           const SizedBox(height: 10),
           _addr('Polygon', widget.wallet.polygon),
           _addr('Solana', widget.wallet.solana),
           const SizedBox(height: 12),
-          const Text('Palavras de recuperação', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: .5, color: C.muted)),
+          Text(tr('info.words'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: .5, color: C.muted)),
           const SizedBox(height: 10),
           Panel(
             child: Column(
@@ -145,16 +170,16 @@ class _WalletInfoPageState extends State<WalletInfoPage> {
                     ],
                   )
                 else
-                  const Text('Escondidas. Quem tiver estas 12 palavras controla todo o saldo.', style: TextStyle(color: C.textSec, fontSize: 14)),
+                  Text(tr('info.hidden'), style: const TextStyle(color: C.textSec, fontSize: 14)),
                 const SizedBox(height: 12),
-                OutlineButton(label: _show ? 'Esconder' : 'Mostrar as 12 palavras', icon: _show ? Icons.visibility_off : Icons.visibility, onPressed: _toggle),
+                OutlineButton(label: _show ? tr('info.hide') : tr('info.show'), icon: _show ? Icons.visibility_off : Icons.visibility, onPressed: _toggle),
               ],
             ),
           ),
           const SizedBox(height: 24),
-          const Text('Zona de risco', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: .5, color: C.muted)),
+          Text(tr('info.risk'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: .5, color: C.muted)),
           const SizedBox(height: 10),
-          OutlineButton(label: 'Apagar carteira', icon: Icons.delete_outline, onPressed: _openDelete),
+          OutlineButton(label: tr('del.title'), icon: Icons.delete_outline, onPressed: _openDelete),
           const SizedBox(height: 16),
           ValueListenableBuilder<String?>(
             valueListenable: rpcRoute,
@@ -163,7 +188,7 @@ class _WalletInfoPageState extends State<WalletInfoPage> {
                 : Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Text(
-                      route == 'relay' ? 'Polygon: relay IBIRAPAY' : 'Polygon: nós públicos (relay indisponível)',
+                      route == 'relay' ? 'Polygon: relay IBIRAPAY' : tr('info.polyFallback'),
                       style: TextStyle(color: route == 'relay' ? C.primaryLight : C.warn, fontSize: 12),
                     ),
                   ),
@@ -175,7 +200,7 @@ class _WalletInfoPageState extends State<WalletInfoPage> {
                 : Padding(
                     padding: const EdgeInsets.only(bottom: 6),
                     child: Text(
-                      route == 'relay' ? 'Spark: relay IBIRAPAY' : 'Spark: conexão direta (relay indisponível)',
+                      route == 'relay' ? 'Spark: relay IBIRAPAY' : tr('info.sparkFallback'),
                       key: const Key('spark-route'),
                       style: TextStyle(color: route == 'relay' ? C.primaryLight : C.warn, fontSize: 12),
                     ),
